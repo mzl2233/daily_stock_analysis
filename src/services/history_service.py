@@ -17,9 +17,11 @@ from typing import Optional, Dict, Any, List, Tuple, TYPE_CHECKING
 
 from src.config import get_config, resolve_news_window_days
 from src.report_language import (
+    get_bias_status_emoji,
     get_localized_stock_name,
     get_report_labels,
     get_signal_level,
+    localize_bias_status,
     localize_chip_health,
     localize_operation_advice,
     localize_trend_prediction,
@@ -693,8 +695,9 @@ class HistoryService:
                 ])
             # 价格位置
             if price_data:
-                bias_status = price_data.get('bias_status', 'N/A')
-                bias_emoji = "✅" if bias_status == "安全" else ("⚠️" if bias_status == "警戒" else "🚨")
+                raw_bias_status = price_data.get('bias_status', 'N/A')
+                bias_status = localize_bias_status(raw_bias_status, report_language)
+                bias_emoji = get_bias_status_emoji(raw_bias_status)
                 report_lines.extend([
                     f"| {labels['price_metrics_label']} | {labels['current_price_label']} |",
                     "|---------|------|",

@@ -117,6 +117,23 @@ _CHIP_HEALTH_TRANSLATIONS = {
     "caution": {"zh": "警惕", "en": "Caution"},
 }
 
+_BIAS_STATUS_CANONICAL_MAP = {
+    "安全": "safe",
+    "safe": "safe",
+    "警戒": "caution",
+    "警惕": "caution",
+    "caution": "caution",
+    "危险": "danger",
+    "risk": "danger",
+    "danger": "danger",
+}
+
+_BIAS_STATUS_TRANSLATIONS = {
+    "safe": {"zh": "安全", "en": "Safe"},
+    "caution": {"zh": "警戒", "en": "Caution"},
+    "danger": {"zh": "危险", "en": "Danger"},
+}
+
 _PLACEHOLDER_BY_LANGUAGE = {
     "zh": "待补充",
     "en": "TBD",
@@ -440,6 +457,26 @@ def localize_chip_health(value: Any, language: Optional[str]) -> str:
     )
 
 
+def localize_bias_status(value: Any, language: Optional[str]) -> str:
+    """Translate price bias status labels between Chinese and English when recognized."""
+    return _translate_from_map(
+        value,
+        language,
+        canonical_map=_BIAS_STATUS_CANONICAL_MAP,
+        translations=_BIAS_STATUS_TRANSLATIONS,
+    )
+
+
+def get_bias_status_emoji(value: Any) -> str:
+    """Return the stable alert emoji for a localized or canonical bias status."""
+    canonical = _canonicalize_lookup_value(value, _BIAS_STATUS_CANONICAL_MAP)
+    if canonical == "safe":
+        return "✅"
+    if canonical == "caution":
+        return "⚠️"
+    return "🚨"
+
+
 def infer_decision_type_from_advice(value: Any, default: str = "hold") -> str:
     """Infer buy/hold/sell from human-readable operation advice."""
     canonical = _canonicalize_lookup_value(value, _OPERATION_ADVICE_CANONICAL_MAP)
@@ -499,22 +536,22 @@ def get_sentiment_label(score: int, language: Optional[str]) -> str:
     """Return localized sentiment label by score band."""
     normalized = normalize_report_language(language)
     if normalized == "en":
-        if score <= 20:
-            return "Very Bearish"
-        if score <= 40:
-            return "Bearish"
-        if score <= 60:
-            return "Neutral"
-        if score <= 80:
+        if score >= 80:
+            return "Very Bullish"
+        if score >= 60:
             return "Bullish"
-        return "Very Bullish"
+        if score >= 40:
+            return "Neutral"
+        if score >= 20:
+            return "Bearish"
+        return "Very Bearish"
 
-    if score <= 20:
-        return "极度悲观"
-    if score <= 40:
-        return "悲观"
-    if score <= 60:
-        return "中性"
-    if score <= 80:
+    if score >= 80:
+        return "极度乐观"
+    if score >= 60:
         return "乐观"
-    return "极度乐观"
+    if score >= 40:
+        return "中性"
+    if score >= 20:
+        return "悲观"
+    return "极度悲观"
