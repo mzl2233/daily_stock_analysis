@@ -309,10 +309,18 @@ def test_sanitize_llm_log_preview_redacts_provider_prefixed_api_key_json_fields(
     assert "key1,key2" not in preview
 
 
-def test_sanitize_llm_log_preview_redacts_provider_prefixed_secret_fields():
-    preview = _sanitize_llm_log_preview('{"client_secret":"abc123"}')
+@pytest.mark.parametrize(
+    ("raw_preview", "expected_preview"),
+    [
+        ('{"client_secret":"abc123"}', '{"client_secret":"[REDACTED]"}'),
+        ('{"clientSecret":"abc123"}', '{"clientSecret":"[REDACTED]"}'),
+        ('{"accessToken":"abc123"}', '{"accessToken":"[REDACTED]"}'),
+    ],
+)
+def test_sanitize_llm_log_preview_redacts_secret_and_token_fields(raw_preview, expected_preview):
+    preview = _sanitize_llm_log_preview(raw_preview)
 
-    assert preview == '{"client_secret":"[REDACTED]"}'
+    assert preview == expected_preview
     assert "abc123" not in preview
 
 
