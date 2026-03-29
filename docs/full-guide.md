@@ -70,6 +70,8 @@ daily_stock_analysis/
 |------------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | 企业微信 Webhook URL | 可选 |
 | `FEISHU_WEBHOOK_URL` | 飞书 Webhook URL | 可选 |
+| `FEISHU_WEBHOOK_SECRET` | 飞书 Webhook 签名密钥（开启“签名校验”时必填） | 可选 |
+| `FEISHU_WEBHOOK_KEYWORD` | 飞书 Webhook 关键词（开启“关键词”时必填） | 可选 |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token（@BotFather 获取） | 可选 |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可选 |
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID (用于发送到子话题) | 可选 |
@@ -194,6 +196,8 @@ daily_stock_analysis/
 |--------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | 企业微信机器人 Webhook URL | 可选 |
 | `FEISHU_WEBHOOK_URL` | 飞书机器人 Webhook URL | 可选 |
+| `FEISHU_WEBHOOK_SECRET` | 飞书机器人签名密钥（仅在机器人安全设置启用“签名校验”时填写） | 可选 |
+| `FEISHU_WEBHOOK_KEYWORD` | 飞书机器人关键词（仅在机器人安全设置启用“关键词”时填写） | 可选 |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | 可选 |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | 可选 |
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID | 可选 |
@@ -233,6 +237,8 @@ daily_stock_analysis/
 > 2. 配置 GitHub Secrets
 > 3. 创建群组并添加应用机器人
 > 4. 在云盘文件夹中添加群组为协作者（可管理权限）
+>
+> 说明：`FEISHU_APP_ID` / `FEISHU_APP_SECRET` 用于飞书应用、云文档或 Stream Bot 模式，不会直接启用群 Webhook 推送。只想收通知时，请优先配置 `FEISHU_WEBHOOK_URL`。
 
 ### 搜索服务配置
 
@@ -555,9 +561,19 @@ crontab -e
 
 ### 飞书
 
-1. 在飞书群聊中添加"自定义机器人"
-2. 复制 Webhook URL
-3. 设置 `FEISHU_WEBHOOK_URL`
+1. 在飞书群聊中添加“自定义机器人”，复制 Webhook URL。
+2. 设置 `FEISHU_WEBHOOK_URL`，格式通常为 `https://open.feishu.cn/open-apis/bot/v2/hook/...`。
+3. 如果机器人安全设置开启了“签名校验”，同步设置 `FEISHU_WEBHOOK_SECRET`。
+4. 如果机器人安全设置开启了“关键词”，同步设置 `FEISHU_WEBHOOK_KEYWORD`；系统会自动在每条飞书消息前补上该关键词。
+5. 如果你配置的是 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`，那是飞书应用 / Stream Bot / 云文档模式，不会直接触发群 Webhook 推送。
+
+常见失败原因：
+- 只填了 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`，但没有配置 `FEISHU_WEBHOOK_URL`
+- 群机器人开启了“签名校验”或“关键词”，但本地没有同步配置 `FEISHU_WEBHOOK_SECRET` / `FEISHU_WEBHOOK_KEYWORD`
+- 机器人没有被加入目标群，或群管理员限制了机器人发言
+- 飞书侧额外配置了 IP 白名单，但当前运行环境 IP 不在白名单中
+
+更完整的图文排查请看 [docs/bot/feishu-bot-config.md](bot/feishu-bot-config.md)。
 
 ### Telegram
 

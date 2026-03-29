@@ -70,6 +70,8 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 |------------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | WeChat Work Webhook URL | Optional |
 | `FEISHU_WEBHOOK_URL` | Feishu Webhook URL | Optional |
+| `FEISHU_WEBHOOK_SECRET` | Feishu Webhook signing secret (required when “Signature” security is enabled) | Optional |
+| `FEISHU_WEBHOOK_KEYWORD` | Feishu Webhook keyword (required when “Keyword” security is enabled) | Optional |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token (get from @BotFather) | Optional |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | Optional |
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID (for sending to topics) | Optional |
@@ -183,6 +185,8 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 |--------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | WeChat Work Bot Webhook URL | Optional |
 | `FEISHU_WEBHOOK_URL` | Feishu Bot Webhook URL | Optional |
+| `FEISHU_WEBHOOK_SECRET` | Feishu bot signing secret (only for webhook bots with Signature security enabled) | Optional |
+| `FEISHU_WEBHOOK_KEYWORD` | Feishu bot keyword (only for webhook bots with Keyword security enabled) | Optional |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | Optional |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | Optional |
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID | Optional |
@@ -222,6 +226,8 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 > 2. Configure GitHub Secrets
 > 3. Create a group and add the app bot
 > 4. Add the group as a collaborator to the cloud drive folder (with manage permissions)
+>
+> Note: `FEISHU_APP_ID` / `FEISHU_APP_SECRET` are for Feishu app mode, cloud documents, or Stream Bot mode. They do not enable group webhook notifications by themselves. For simple push notifications, use `FEISHU_WEBHOOK_URL` first.
 
 ### Search Service Configuration
 
@@ -467,9 +473,17 @@ crontab -e
 
 ### Feishu
 
-1. Add "Custom Bot" in Feishu group chat
-2. Copy Webhook URL
-3. Set `FEISHU_WEBHOOK_URL`
+1. Add a "Custom Bot" in the target Feishu group and copy its Webhook URL.
+2. Set `FEISHU_WEBHOOK_URL`. It usually looks like `https://open.feishu.cn/open-apis/bot/v2/hook/...`.
+3. If bot security enables "Signature", also set `FEISHU_WEBHOOK_SECRET`.
+4. If bot security enables "Keyword", also set `FEISHU_WEBHOOK_KEYWORD`. The app will prepend it to every Feishu message automatically.
+5. `FEISHU_APP_ID` / `FEISHU_APP_SECRET` are for app / Stream Bot / cloud document flows, not plain webhook push notifications.
+
+Common failure causes:
+- Only `FEISHU_APP_ID` / `FEISHU_APP_SECRET` were set, but `FEISHU_WEBHOOK_URL` was not configured
+- The bot requires Signature or Keyword security, but `FEISHU_WEBHOOK_SECRET` / `FEISHU_WEBHOOK_KEYWORD` were not set locally
+- The bot was not added to the target group, or group permissions block it from posting
+- A Feishu IP allowlist is enabled and your runtime IP is not on the allowlist
 
 ### Telegram
 

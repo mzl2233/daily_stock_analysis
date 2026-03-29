@@ -794,6 +794,39 @@ class SystemConfigService:
                 }
             )
 
+        feishu_relevant_keys = {
+            "FEISHU_APP_ID",
+            "FEISHU_APP_SECRET",
+            "FEISHU_WEBHOOK_URL",
+            "FEISHU_STREAM_ENABLED",
+        }
+        has_feishu_app_credentials = bool(
+            (effective_map.get("FEISHU_APP_ID") or "").strip()
+            or (effective_map.get("FEISHU_APP_SECRET") or "").strip()
+        )
+        has_feishu_webhook = bool((effective_map.get("FEISHU_WEBHOOK_URL") or "").strip())
+        feishu_stream_enabled = parse_env_bool(
+            effective_map.get("FEISHU_STREAM_ENABLED"),
+            default=False,
+        )
+        if has_feishu_app_credentials and not has_feishu_webhook and not feishu_stream_enabled and (
+            updated_keys & feishu_relevant_keys
+        ):
+            issues.append(
+                {
+                    "key": "FEISHU_WEBHOOK_URL",
+                    "code": "feishu_mode_mismatch",
+                    "message": (
+                        "仅配置 FEISHU_APP_ID / FEISHU_APP_SECRET 不会开启飞书群 Webhook 推送；"
+                        "如需通知推送请填写 FEISHU_WEBHOOK_URL，若要使用应用机器人请同时开启 "
+                        "FEISHU_STREAM_ENABLED 并完成应用发布与权限配置。"
+                    ),
+                    "severity": "warning",
+                    "expected": "FEISHU_WEBHOOK_URL or FEISHU_STREAM_ENABLED=true",
+                    "actual": "app credentials only",
+                }
+            )
+
         issues.extend(
             SystemConfigService._validate_llm_channel_map(
                 effective_map=effective_map,
