@@ -29,6 +29,7 @@ class TestPipelinePrefetchBehavior(unittest.TestCase):
         pipeline.process_single_stock = MagicMock(return_value=process_result)
         pipeline.config = SimpleNamespace(
             stock_list=["000001"],
+            stock_name_overrides={},
             refresh_stock_list=lambda: None,
             single_stock_notify=False,
             report_type="simple",
@@ -50,6 +51,16 @@ class TestPipelinePrefetchBehavior(unittest.TestCase):
 
         pipeline.fetcher_manager.prefetch_stock_names.assert_called_once_with(
             ["000001"], use_bulk=False
+        )
+
+    def test_run_non_dry_run_skips_prefetch_for_manual_named_stocks(self):
+        pipeline = self._build_pipeline(process_result=SimpleNamespace(code="000001"))
+        pipeline.config.stock_name_overrides = {"000001": "平安银行"}
+
+        pipeline.run(stock_codes=["000001", "600519"], dry_run=False, send_notification=False)
+
+        pipeline.fetcher_manager.prefetch_stock_names.assert_called_once_with(
+            ["600519"], use_bulk=False
         )
 
 

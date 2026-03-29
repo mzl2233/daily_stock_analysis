@@ -126,6 +126,44 @@ class StockAnalysisPipeline:
         if self.social_sentiment_service.is_available:
             logger.info("Social sentiment service enabled (Reddit/X/Polymarket, US stocks only)")
 
+    def _get_stock_name_overrides(self) -> Dict[str, str]:
+        config = getattr(self, "config", None)
+        overrides = getattr(config, "stock_name_overrides", {})
+        return overrides if isinstance(overrides, dict) else {}
+
+    def _get_manual_stock_name(self, code: str) -> str:
+        """Return a configured display-name override for a stock code."""
+        overrides = self._get_stock_name_overrides()
+        if not overrides:
+            return ""
+
+        raw_code = str(code or "").strip()
+        if not raw_code:
+            return ""
+
+        candidates = [raw_code, raw_code.upper()]
+        normalized_code = normalize_stock_code(raw_code)
+        if normalized_code:
+            candidates.extend([normalized_code, normalized_code.upper()])
+
+        seen = set()
+        for candidate in candidates:
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            name = overrides.get(candidate)
+            if isinstance(name, str) and name.strip():
+                return name.strip()
+
+        if normalized_code:
+            for candidate, name in overrides.items():
+                if normalize_stock_code(str(candidate or "").strip()) != normalized_code:
+                    continue
+                if isinstance(name, str) and name.strip():
+                    return name.strip()
+
+        return ""
+
     def fetch_and_save_stock_data(
         self, 
         code: str,
@@ -149,7 +187,7 @@ class StockAnalysisPipeline:
         stock_name = code
         try:
             # 首先获取股票名称
-            stock_name = self.fetcher_manager.get_stock_name(code)
+            stock_name = self._get_manual_stock_name(code) or self.fetcher_manager.get_stock_name(code)
 
             today = date.today()
             # 注意：这里用自然日 date.today() 做“断点续传”判断。
@@ -202,8 +240,8 @@ class StockAnalysisPipeline:
             AnalysisResult 或 None（如果分析失败）
         """
         try:
-            # 获取股票名称（优先从实时行情获取真实名称）
-            stock_name = self.fetcher_manager.get_stock_name(code)
+            # 获取股票名称（优先使用本地备注，缺失时再走远程名称解析）
+            stock_name = self._get_manual_stock_name(code) or self.fetcher_manager.get_stock_name(code)
 
             # Step 1: 获取实时行情（量比、换手率等）- 使用统一入口，自动故障切换
             realtime_quote = None
@@ -211,8 +249,9 @@ class StockAnalysisPipeline:
                 realtime_quote = self.fetcher_manager.get_realtime_quote(code)
                 if realtime_quote:
                     # 使用实时行情返回的真实股票名称
-                    if realtime_quote.name:
-                        stock_name = realtime_quote.name
+                    realtime_name = str(getattr(realtime_quote, "name", "") or "").strip()
+                    if realtime_name and not self._is_placeholder_stock_name(realtime_name, code):
+                        stock_name = realtime_name
                     # 兼容不同数据源的字段（有些数据源可能没有 volume_ratio）
                     volume_ratio = getattr(realtime_quote, 'volume_ratio', None)
                     turnover_rate = getattr(realtime_quote, 'turnover_rate', None)
@@ -1212,7 +1251,12 @@ class StockAnalysisPipeline:
         # Issue #455: 预取股票名称，避免并发分析时显示「股票xxxxx」
         # dry_run 仅做数据拉取，不需要名称预取，避免额外网络开销
         if not dry_run:
-            self.fetcher_manager.prefetch_stock_names(stock_codes, use_bulk=False)
+            prefetch_codes = [
+                code for code in stock_codes
+                if not self._get_manual_stock_name(code)
+            ]
+            if prefetch_codes:
+                self.fetcher_manager.prefetch_stock_names(prefetch_codes, use_bulk=False)
 
         # 单股推送模式（#55）：从配置读取
         single_stock_notify = getattr(self.config, 'single_stock_notify', False)

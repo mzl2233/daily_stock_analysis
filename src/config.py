@@ -56,6 +56,7 @@ NEWS_STRATEGY_WINDOWS: Dict[str, int] = {
     "medium": 7,
     "long": 30,
 }
+_STOCK_LIST_NOTE_SEPARATOR_RE = re.compile(r"[:：]", re.UNICODE)
 
 
 def parse_env_bool(value: Optional[str], default: bool = False) -> bool:
@@ -156,6 +157,33 @@ def parse_env_float(
         )
         parsed = maximum
     return parsed
+
+
+def parse_stock_list_config(value: Optional[str]) -> Tuple[List[str], Dict[str, str]]:
+    """Parse STOCK_LIST into stock codes plus optional manual display names."""
+    stock_list: List[str] = []
+    stock_name_overrides: Dict[str, str] = {}
+
+    for raw_item in str(value or "").split(","):
+        entry = raw_item.strip()
+        if not entry:
+            continue
+
+        parts = _STOCK_LIST_NOTE_SEPARATOR_RE.split(entry, maxsplit=1)
+        code = (parts[0] or "").strip().upper()
+        if not code:
+            continue
+
+        stock_list.append(code)
+
+        if len(parts) < 2:
+            continue
+
+        display_name = (parts[1] or "").strip()
+        if display_name:
+            stock_name_overrides[code] = display_name
+
+    return stock_list, stock_name_overrides
 
 
 def normalize_news_strategy_profile(value: Optional[str]) -> str:
@@ -428,6 +456,7 @@ class Config:
     
     # === 自选股配置 ===
     stock_list: List[str] = field(default_factory=list)
+    stock_name_overrides: Dict[str, str] = field(default_factory=dict)
 
     # === 飞书云文档配置 ===
     feishu_app_id: Optional[str] = None
@@ -860,15 +889,12 @@ class Config:
         
         # 解析自选股列表（逗号分隔，统一为大写 Issue #355）
         stock_list_str = os.getenv('STOCK_LIST', '')
-        stock_list = [
-            (c or "").strip().upper()
-            for c in stock_list_str.split(',')
-            if (c or "").strip()
-        ]
+        stock_list, stock_name_overrides = parse_stock_list_config(stock_list_str)
         
         # 如果没有配置，使用默认的示例股票
         if not stock_list:
             stock_list = ['600519', '000001', '300750']
+            stock_name_overrides = {}
         
         # === LiteLLM multi-key parsing ===
         # GEMINI_API_KEYS (comma-separated) > GEMINI_API_KEY (single)
@@ -1063,6 +1089,7 @@ class Config:
         
         return cls(
             stock_list=stock_list,
+            stock_name_overrides=stock_name_overrides,
             feishu_app_id=os.getenv('FEISHU_APP_ID'),
             feishu_app_secret=os.getenv('FEISHU_APP_SECRET'),
             feishu_folder_token=os.getenv('FEISHU_FOLDER_TOKEN'),
@@ -1817,16 +1844,14 @@ class Config:
         if not stock_list_str:
             stock_list_str = os.getenv('STOCK_LIST', '')
 
-        stock_list = [
-            (c or "").strip().upper()
-            for c in stock_list_str.split(',')
-            if (c or "").strip()
-        ]
+        stock_list, stock_name_overrides = parse_stock_list_config(stock_list_str)
 
         if not stock_list:
             stock_list = ['000001']
+            stock_name_overrides = {}
 
         self.stock_list = stock_list
+        self.stock_name_overrides = stock_name_overrides
     
     def validate_structured(self) -> List[ConfigIssue]:
         """Return structured validation issues with severity levels.

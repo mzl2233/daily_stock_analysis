@@ -53,6 +53,29 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_load_from_env_parses_stock_list_name_overrides(
+        self, _mock_parse_litellm_yaml, _mock_setup_env
+    ):
+        with patch.dict(
+            os.environ,
+            {
+                "STOCK_LIST": "600519:贵州茅台,hk00700：腾讯控股,AAPL",
+            },
+            clear=True,
+        ):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.stock_list, ["600519", "HK00700", "AAPL"])
+        self.assertEqual(
+            config.stock_name_overrides,
+            {
+                "600519": "贵州茅台",
+                "HK00700": "腾讯控股",
+            },
+        )
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
     def test_schedule_run_immediately_falls_back_to_legacy_run_immediately(
         self,
         _mock_parse_yaml,
