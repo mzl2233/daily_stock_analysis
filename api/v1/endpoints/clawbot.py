@@ -95,7 +95,21 @@ def _build_agent_session_id(request: ClawBotMessageRequest) -> str:
 def _should_use_nl_stock_resolution(request: ClawBotMessageRequest) -> bool:
     if request.mode != "auto":
         return True
-    return bool(_CJK_RE.search(request.message or ""))
+    if _CJK_RE.search(request.message or ""):
+        return True
+
+    from src.data.stock_mapping import STOCK_NAME_MAP
+
+    for token in re.findall(r"[A-Za-z0-9.]+", request.message or ""):
+        if not _DIRECT_STOCK_TOKEN_RE.fullmatch(token):
+            continue
+
+        normalized = token.upper()
+        if normalized.isalpha() and "." not in normalized and normalized not in STOCK_NAME_MAP:
+            continue
+        return True
+
+    return False
 
 
 def _resolve_direct_auto_stock_code(message: str) -> Optional[str]:

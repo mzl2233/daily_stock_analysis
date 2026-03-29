@@ -219,6 +219,32 @@ def test_clawbot_message_auto_mode_routes_direct_ascii_ticker_to_analysis(
     assert args[0] == analysis_code
 
 
+def test_clawbot_message_auto_mode_routes_english_request_with_ascii_ticker_to_analysis():
+    analysis_result = SimpleNamespace(
+        query_id="query_clawbot_english_ascii",
+        stock_code="AAPL",
+        stock_name="苹果",
+        report={"summary": {}, "strategy": {}},
+    )
+
+    with patch(
+        "api.v1.endpoints.clawbot._handle_sync_analysis",
+        return_value=analysis_result,
+    ) as handle_analysis:
+        response = handle_clawbot_message(
+            ClawBotMessageRequest(message="analyze AAPL", mode="auto")
+        )
+
+    assert response.mode == "analysis"
+    assert response.query_id == "query_clawbot_english_ascii"
+    assert response.stock_code == "AAPL"
+    assert response.stock_name == "苹果"
+    assert "苹果" in response.text
+    handle_analysis.assert_called_once()
+    args, _ = handle_analysis.call_args
+    assert args[0] == "AAPL"
+
+
 def test_clawbot_message_returns_consistent_error_when_agent_unavailable():
     config = SimpleNamespace(is_agent_available=lambda: False)
 
