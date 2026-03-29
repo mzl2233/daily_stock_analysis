@@ -480,7 +480,7 @@ function buildModelOptions(models: string[], selectedModel: string, autoLabel: s
   return options;
 }
 
-const MANAGED_PROVIDERS = new Set(['gemini', 'vertex_ai', 'anthropic', 'openai', 'deepseek']);
+const MANAGED_PROVIDERS = new Set(['gemini', 'vertex_ai', 'anthropic', 'openai', 'deepseek', 'minimax']);
 
 function usesDirectEnvProvider(model: string): boolean {
   if (!model || !model.includes('/')) return false;
