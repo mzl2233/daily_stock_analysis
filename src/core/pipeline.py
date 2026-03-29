@@ -951,7 +951,11 @@ class StockAnalysisPipeline:
         normalized = str(name).strip()
         if not normalized:
             return True
+        normalized_name_code = normalize_stock_code(normalized)
+        normalized_input_code = normalize_stock_code(str(code or "").strip())
         if normalized == code:
+            return True
+        if normalized_name_code and normalized_input_code and normalized_name_code == normalized_input_code:
             return True
         if normalized.startswith("股票"):
             return True

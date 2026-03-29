@@ -132,4 +132,42 @@ describe('IntelligentImport', () => {
     });
     expect(await screen.findByText('配置已更新，请再次点击「合并到自选股」')).toBeInTheDocument();
   });
+
+  it('deduplicates imported codes against existing remark entries', async () => {
+    parseImport.mockResolvedValue({
+      items: [{ code: '600519', name: 'Kweichow Moutai', confidence: 'high' }],
+      codes: [],
+    });
+    update.mockResolvedValue(undefined);
+
+    render(
+      <IntelligentImport
+        stockListValue="600519:贵州茅台"
+        configVersion="v1"
+        maskToken="******"
+        onMerged={onMerged}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('或粘贴 CSV/Excel 复制的文本...'), {
+      target: { value: '600519' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '解析' }));
+
+    await screen.findByText('600519');
+
+    fireEvent.click(screen.getByRole('button', { name: '合并到自选股' }));
+
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledWith({
+        configVersion: 'v1',
+        maskToken: '******',
+        reloadNow: true,
+        items: [{ key: 'STOCK_LIST', value: '600519:贵州茅台' }],
+      });
+    });
+    await waitFor(() => {
+      expect(onMerged).toHaveBeenCalledWith('600519:贵州茅台');
+    });
+  });
 });

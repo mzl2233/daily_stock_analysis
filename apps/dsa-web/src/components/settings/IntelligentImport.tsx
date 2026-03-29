@@ -9,6 +9,7 @@ const IMG_EXT = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
 const IMG_MAX = 5 * 1024 * 1024; // 5MB
 const FILE_MAX = 2 * 1024 * 1024; // 2MB
 const TEXT_MAX = 100 * 1024; // 100KB
+const STOCK_LIST_NOTE_SEPARATOR = /[:：]/;
 
 interface IntelligentImportProps {
   stockListValue: string;
@@ -35,6 +36,53 @@ function normalizeConfidence(confidence?: string | null): 'high' | 'medium' | 'l
     return confidence;
   }
   return 'medium';
+}
+
+function normalizeStockListCode(code: string): string {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) {
+    return '';
+  }
+  if (/^HK\d{1,5}$/.test(normalized)) {
+    return `HK${normalized.slice(2).padStart(5, '0')}`;
+  }
+  if (/^(SH|SZ|BJ)\d{6}$/.test(normalized)) {
+    return normalized.slice(2);
+  }
+  const hkSuffixMatch = normalized.match(/^(\d{1,5})\.HK$/);
+  if (hkSuffixMatch) {
+    return `HK${hkSuffixMatch[1].padStart(5, '0')}`;
+  }
+  const cnSuffixMatch = normalized.match(/^(\d{6})\.(SH|SZ|SS|BJ)$/);
+  if (cnSuffixMatch) {
+    return cnSuffixMatch[1];
+  }
+  return normalized;
+}
+
+function getStockListEntryKey(entry: string): string {
+  const [rawCode = ''] = entry.trim().split(STOCK_LIST_NOTE_SEPARATOR, 1);
+  return normalizeStockListCode(rawCode);
+}
+
+function mergeStockListEntries(current: string[], toMerge: string[]): string[] {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of [...current, ...toMerge]) {
+    const trimmed = entry.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const key = getStockListEntryKey(trimmed) || trimmed;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(trimmed);
+  }
+
+  return merged;
 }
 
 function mergeItems(
@@ -259,7 +307,7 @@ export const IntelligentImport: React.FC<IntelligentImportProps> = ({
       return;
     }
     const current = parseCurrentList();
-    const merged = [...new Set([...current, ...toMerge])];
+    const merged = mergeStockListEntries(current, toMerge);
     const value = merged.join(',');
 
     setIsMerging(true);
