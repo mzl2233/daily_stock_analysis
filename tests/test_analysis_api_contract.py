@@ -76,6 +76,21 @@ class AnalysisApiContractTestCase(unittest.TestCase):
 
         self.assertEqual(result["report"]["meta"]["report_type"], "full")
 
+    def test_analysis_service_returns_none_and_records_last_error_for_unsuccessful_pipeline_result(self) -> None:
+        service = AnalysisService()
+        pipeline_instance = MagicMock()
+        pipeline_instance.process_single_stock.return_value = SimpleNamespace(
+            success=False,
+            error_message="LLM stream interrupted",
+        )
+
+        with patch("src.config.get_config", return_value=SimpleNamespace()), \
+             patch("src.core.pipeline.StockAnalysisPipeline", return_value=pipeline_instance):
+            result = service.analyze_stock("600519", report_type="detailed", query_id="q1", send_notification=False)
+
+        self.assertIsNone(result)
+        self.assertEqual(service.last_error, "LLM stream interrupted")
+
     def test_build_analysis_response_localizes_placeholder_stock_name_for_english(self) -> None:
         service = AnalysisService()
         result = service._build_analysis_response(
@@ -800,6 +815,25 @@ class BatchTaskQueueContractTestCase(unittest.TestCase):
         self.assertEqual(len(accepted), 2)
         self.assertEqual(duplicates, [])
         self.assertEqual(lock_states, [True, True])
+
+    def test_update_task_progress_broadcasts_task_progress_event(self) -> None:
+        queue = AnalysisTaskQueue(max_workers=1)
+        queue._executor = type("ExecutorStub", (), {"submit": lambda self, *args, **kwargs: Future()})()
+        accepted, _ = queue.submit_tasks_batch(["600519"], report_type="detailed")
+
+        events = []
+        queue._broadcast_event = lambda event_type, data: events.append((event_type, data))
+
+        updated = queue.update_task_progress(
+            accepted[0].task_id,
+            62,
+            "LLM 正在生成分析结果",
+        )
+
+        self.assertIsNotNone(updated)
+        self.assertEqual(updated.progress, 62)
+        self.assertEqual(updated.message, "LLM 正在生成分析结果")
+        self.assertEqual(events, [("task_progress", updated.to_dict())])
 
 
 class ImageStockExtractorContractTestCase(unittest.TestCase):

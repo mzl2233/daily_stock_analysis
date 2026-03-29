@@ -482,6 +482,7 @@ async def task_stream():
     - connected: 连接成功
     - task_created: 新任务创建
     - task_started: 任务开始执行
+    - task_progress: 任务阶段进度更新
     - task_completed: 任务完成
     - task_failed: 任务失败
     - heartbeat: 心跳（每 30 秒）

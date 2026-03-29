@@ -9,6 +9,7 @@ Covers:
   does NOT trigger AttributeError (regression guard for the old bypass bug)
 """
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 # Stub heavy dependencies before project imports
@@ -67,6 +68,78 @@ class TestAnalyzerGenerateText:
             gen_cfg = kwargs["generation_config"]
             assert gen_cfg["max_tokens"] == 2048
             assert gen_cfg["temperature"] == 0.7
+
+    def test_call_litellm_stream_aggregates_chunks_and_reports_progress(self):
+        analyzer = self._make_analyzer()
+        analyzer._config_override = SimpleNamespace(
+            litellm_model="gemini/gemini-2.0-flash",
+            litellm_fallback_models=[],
+            llm_model_list=[],
+        )
+
+        def stream_response():
+            yield SimpleNamespace(
+                choices=[SimpleNamespace(delta=SimpleNamespace(content="abc"))],
+                usage=None,
+            )
+            yield SimpleNamespace(
+                choices=[SimpleNamespace(delta=SimpleNamespace(content="def"))],
+                usage=SimpleNamespace(prompt_tokens=1, completion_tokens=2, total_tokens=3),
+            )
+
+        progress_updates = []
+
+        with patch.object(analyzer, "_dispatch_litellm_completion", return_value=stream_response()):
+            text, model, usage = analyzer._call_litellm(
+                "prompt",
+                {"max_tokens": 128, "temperature": 0.2},
+                stream=True,
+                stream_progress_callback=progress_updates.append,
+            )
+
+        assert text == "abcdef"
+        assert model == "gemini/gemini-2.0-flash"
+        assert usage == {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
+        assert progress_updates == [3, 6]
+
+    def test_call_litellm_stream_falls_back_to_non_stream_before_first_chunk(self):
+        analyzer = self._make_analyzer()
+        analyzer._config_override = SimpleNamespace(
+            litellm_model="gemini/gemini-2.0-flash",
+            litellm_fallback_models=[],
+            llm_model_list=[],
+        )
+
+        def broken_stream():
+            raise RuntimeError("stream unsupported")
+            yield  # pragma: no cover
+
+        response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="full response"))],
+            usage=SimpleNamespace(prompt_tokens=4, completion_tokens=5, total_tokens=9),
+        )
+
+        dispatch_calls = []
+
+        def fake_dispatch(model, call_kwargs, **kwargs):
+            dispatch_calls.append(call_kwargs.copy())
+            if call_kwargs.get("stream"):
+                return broken_stream()
+            return response
+
+        with patch.object(analyzer, "_dispatch_litellm_completion", side_effect=fake_dispatch):
+            text, model, usage = analyzer._call_litellm(
+                "prompt",
+                {"max_tokens": 128, "temperature": 0.2},
+                stream=True,
+            )
+
+        assert text == "full response"
+        assert model == "gemini/gemini-2.0-flash"
+        assert usage == {"prompt_tokens": 4, "completion_tokens": 5, "total_tokens": 9}
+        assert len(dispatch_calls) == 2
+        assert dispatch_calls[0]["stream"] is True
+        assert "stream" not in dispatch_calls[1]
 
 
 # ---------------------------------------------------------------------------

@@ -18,7 +18,7 @@ import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Callable
 
 import pandas as pd
 
@@ -73,7 +73,8 @@ class StockAnalysisPipeline:
         source_message: Optional[BotMessage] = None,
         query_id: Optional[str] = None,
         query_source: Optional[str] = None,
-        save_context_snapshot: Optional[bool] = None
+        save_context_snapshot: Optional[bool] = None,
+        progress_callback: Optional[Callable[[int, str], None]] = None,
     ):
         """
         初始化调度器
@@ -90,6 +91,7 @@ class StockAnalysisPipeline:
         self.save_context_snapshot = (
             self.config.save_context_snapshot if save_context_snapshot is None else save_context_snapshot
         )
+        self.progress_callback = progress_callback
         
         # 初始化各模块
         self.db = get_db()
@@ -136,6 +138,16 @@ class StockAnalysisPipeline:
         )
         if self.social_sentiment_service.is_available:
             logger.info("Social sentiment service enabled (Reddit/X/Polymarket, US stocks only)")
+
+    def _emit_progress(self, progress: int, message: str) -> None:
+        """Best-effort bridge from pipeline stages to task SSE progress."""
+        callback = getattr(self, "progress_callback", None)
+        if callback is None:
+            return
+        try:
+            callback(progress, message)
+        except Exception as exc:
+            logger.debug("[pipeline] progress callback skipped: %s", exc)
 
     def fetch_and_save_stock_data(
         self, 
@@ -213,7 +225,9 @@ class StockAnalysisPipeline:
         Returns:
             AnalysisResult 或 None（如果分析失败）
         """
+        stock_name = code
         try:
+            self._emit_progress(18, f"{code}：正在获取行情与筹码数据")
             # 获取股票名称（先走轻量名称路径，后续若 realtime_quote 有 name 再覆盖）
             stock_name = self.fetcher_manager.get_stock_name(code, allow_realtime=False)
 
@@ -268,6 +282,8 @@ class StockAnalysisPipeline:
                     use_agent = True
                     logger.info(f"{stock_name}({code}) Auto-enabled agent mode due to configured skills: {configured_skills}")
 
+            self._emit_progress(32, f"{stock_name}：正在聚合基本面与趋势数据")
+
             # Step 2.5: 基本面能力聚合（统一入口，异常降级）
             # - 失败时返回 partial/failed，不影响既有技术面/新闻链路
             # - 关闭开关时仍返回 not_supported 结构
@@ -318,6 +334,7 @@ class StockAnalysisPipeline:
 
             if use_agent:
                 logger.info(f"{stock_name}({code}) 启用 Agent 模式进行分析")
+                self._emit_progress(58, f"{stock_name}：正在切换 Agent 分析链路")
                 return self._analyze_with_agent(
                     code,
                     report_type,
@@ -331,6 +348,7 @@ class StockAnalysisPipeline:
 
             # Step 4: 多维度情报搜索（最新消息+风险排查+业绩预期）
             news_context = None
+            self._emit_progress(46, f"{stock_name}：正在检索新闻与舆情")
             if self.search_service.is_available:
                 logger.info(f"{stock_name}({code}) 开始多维度情报搜索...")
 
@@ -382,6 +400,7 @@ class StockAnalysisPipeline:
                     logger.warning(f"{stock_name}({code}) Social sentiment fetch failed: {e}")
 
             # Step 5: 获取分析上下文（技术面数据）
+            self._emit_progress(58, f"{stock_name}：正在整理分析上下文")
             context = self.db.get_analysis_context(code)
 
             if context is None:
@@ -409,10 +428,29 @@ class StockAnalysisPipeline:
             )
             
             # Step 7: 调用 AI 分析（传入增强的上下文和新闻）
-            result = self.analyzer.analyze(enhanced_context, news_context=news_context)
+            llm_progress_state = {"last_progress": 64}
+
+            def _on_llm_stream(chars_received: int) -> None:
+                dynamic_progress = min(92, 64 + min(chars_received // 80, 28))
+                if dynamic_progress <= llm_progress_state["last_progress"]:
+                    return
+                llm_progress_state["last_progress"] = dynamic_progress
+                self._emit_progress(
+                    dynamic_progress,
+                    f"{stock_name}：LLM 正在生成分析结果（已接收 {chars_received} 字符）",
+                )
+
+            self._emit_progress(64, f"{stock_name}：正在请求 LLM 生成报告")
+            result = self.analyzer.analyze(
+                enhanced_context,
+                news_context=news_context,
+                progress_callback=self._emit_progress,
+                stream_progress_callback=_on_llm_stream,
+            )
 
             # Step 7.5: 填充分析时的价格信息到 result
             if result:
+                self._emit_progress(94, f"{stock_name}：正在校验并整理分析结果")
                 result.query_id = query_id
                 realtime_data = enhanced_context.get('realtime', {})
                 result.current_price = realtime_data.get('price')
@@ -427,8 +465,9 @@ class StockAnalysisPipeline:
                 fill_price_position_if_needed(result, trend_result, realtime_quote)
 
             # Step 8: 保存分析历史记录
-            if result:
+            if result and result.success:
                 try:
+                    self._emit_progress(97, f"{stock_name}：正在保存分析报告")
                     context_snapshot = self._build_context_snapshot(
                         enhanced_context=enhanced_context,
                         news_content=news_context,
@@ -779,7 +818,7 @@ class StockAnalysisPipeline:
                     logger.warning(f"[{code}] Agent 模式保存新闻情报失败: {e}")
 
             # 保存分析历史记录
-            if result:
+            if result and result.success:
                 try:
                     initial_context["stock_name"] = resolved_stock_name
                     self.db.save_analysis_history(
@@ -1142,6 +1181,7 @@ class StockAnalysisPipeline:
         logger.info(f"========== 开始处理 {code} ==========")
         
         try:
+            self._emit_progress(12, f"{code}：正在准备分析任务")
             # Step 1: 获取并保存数据
             success, error = self.fetch_and_save_stock_data(
                 code, current_time=current_time
@@ -1150,6 +1190,8 @@ class StockAnalysisPipeline:
             if not success:
                 logger.warning(f"[{code}] 数据获取失败: {error}")
                 # 即使获取失败，也尝试用已有数据分析
+            else:
+                self._emit_progress(16, f"{code}：行情数据准备完成")
             
             # Step 2: AI 分析
             if skip_analysis:
