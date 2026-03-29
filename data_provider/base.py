@@ -1048,7 +1048,7 @@ class DataFetcherManager:
             logger.error(f"[预取] 批量预取异常: {e}")
             return 0
     
-    def get_realtime_quote(self, stock_code: str):
+    def get_realtime_quote(self, stock_code: str, *, log_final_failure: bool = True):
         """
         获取实时行情数据（自动故障切换）
         
@@ -1062,6 +1062,8 @@ class DataFetcherManager:
         
         Args:
             stock_code: 股票代码
+            log_final_failure: Whether to emit the final "all sources failed"
+                summary log when no realtime quote is available.
             
         Returns:
             UnifiedRealtimeQuote 对象，所有数据源都失败则返回 None
@@ -1094,7 +1096,8 @@ class DataFetcherManager:
                         except Exception as e:
                             logger.info(f"[实时行情] 美股指数 {stock_code} 获取失败，继续降级: {e}")
                     break
-            logger.debug(f"[实时行情] 美股指数 {stock_code} 无可用数据源")
+            if log_final_failure:
+                logger.info(f"[实时行情] 美股指数 {stock_code} 无可用数据源")
             return None
 
         # 美股单独处理，使用 YfinanceFetcher
@@ -1110,7 +1113,8 @@ class DataFetcherManager:
                         except Exception as e:
                             logger.info(f"[实时行情] 美股 {stock_code} 获取失败，继续降级: {e}")
                     break
-            logger.debug(f"[实时行情] 美股 {stock_code} 无可用数据源")
+            if log_final_failure:
+                logger.info(f"[实时行情] 美股 {stock_code} 无可用数据源")
             return None
 
         # 港股实时行情只走港股专用入口，避免按 A 股 source_priority
@@ -1130,7 +1134,8 @@ class DataFetcherManager:
                     logger.info(f"[实时行情] 港股 {stock_code} 获取失败，继续降级: {e}")
                 break
 
-            logger.debug(f"[实时行情] 港股 {stock_code} 无可用数据源")
+            if log_final_failure:
+                logger.info(f"[实时行情] 港股 {stock_code} 无可用数据源")
             return None
         
         # 获取配置的数据源优先级
@@ -1222,10 +1227,11 @@ class DataFetcherManager:
             return primary_quote
 
         # 所有数据源都失败，返回 None（降级兜底）
-        if errors:
-            logger.debug(f"[实时行情] {stock_code} 所有数据源均失败: {'; '.join(errors)}")
-        else:
-            logger.debug(f"[实时行情] {stock_code} 无可用数据源")
+        if log_final_failure:
+            if errors:
+                logger.info(f"[实时行情] {stock_code} 所有数据源均失败: {'; '.join(errors)}")
+            else:
+                logger.info(f"[实时行情] {stock_code} 无可用数据源")
 
         return None
 
@@ -1353,7 +1359,7 @@ class DataFetcherManager:
         
         # 2. 尝试从实时行情中获取（最快，可按需禁用）
         if allow_realtime:
-            quote = self.get_realtime_quote(raw_stock_code or stock_code)
+            quote = self.get_realtime_quote(raw_stock_code or stock_code, log_final_failure=False)
             if quote and hasattr(quote, 'name') and is_meaningful_stock_name(getattr(quote, 'name', ''), stock_code):
                 name = quote.name
                 self._cache_stock_name(stock_code, name)

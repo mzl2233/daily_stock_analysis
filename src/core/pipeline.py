@@ -209,7 +209,7 @@ class StockAnalysisPipeline:
             realtime_quote = None
             try:
                 if self.config.enable_realtime_quote:
-                    realtime_quote = self.fetcher_manager.get_realtime_quote(code)
+                    realtime_quote = self.fetcher_manager.get_realtime_quote(code, log_final_failure=False)
                     if realtime_quote:
                         # 使用实时行情返回的真实股票名称
                         if realtime_quote.name:

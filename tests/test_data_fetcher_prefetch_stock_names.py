@@ -99,7 +99,7 @@ class TestPrefetchStockNames(unittest.TestCase):
         name = DataFetcherManager.get_stock_name(manager, "000001.SZ")
 
         self.assertEqual(name, "平安银行")
-        manager.get_realtime_quote.assert_called_once_with("000001.SZ")
+        manager.get_realtime_quote.assert_called_once_with("000001.SZ", log_final_failure=False)
 
     def test_fetch_and_save_stock_data_uses_lightweight_name_lookup(self):
         pipeline = StockAnalysisPipeline.__new__(StockAnalysisPipeline)

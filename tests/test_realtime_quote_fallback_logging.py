@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Regression tests for realtime quote fallback logging semantics."""
 
+import asyncio
 import importlib.util
 import logging
 import sys
@@ -116,13 +117,41 @@ def test_pipeline_warns_once_when_all_realtime_sources_fail(caplog):
 
     assert result is None
     pipeline.fetcher_manager.get_stock_name.assert_called_once_with("600519", allow_realtime=False)
-    pipeline.fetcher_manager.get_realtime_quote.assert_called_once_with("600519")
+    pipeline.fetcher_manager.get_realtime_quote.assert_called_once_with("600519", log_final_failure=False)
     downgrade_logs = [
         record.message
         for record in caplog.records
         if "历史收盘价继续分析" in record.message
     ]
     assert downgrade_logs == ["贵州茅台(600519) 所有实时行情数据源均不可用，已降级为历史收盘价继续分析"]
+
+
+@patch("src.config.get_config")
+def test_event_monitor_keeps_manager_failure_summary_for_direct_quote_call(mock_get_config, caplog):
+    from src.agent.events import EventMonitor, PriceAlert
+
+    mock_get_config.return_value = SimpleNamespace(
+        enable_realtime_quote=True,
+        realtime_source_priority="efinance",
+    )
+    manager = DataFetcherManager(
+        fetchers=[
+            _DummyFetcher("EfinanceFetcher", 0, error=RuntimeError("efinance timeout")),
+        ]
+    )
+    monitor = EventMonitor()
+    rule = PriceAlert(stock_code="600519", direction="above", price=1800.0)
+
+    async def _run_inline(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    with patch("data_provider.DataFetcherManager", return_value=manager), patch(
+        "src.agent.events.asyncio.to_thread", new=_run_inline
+    ), caplog.at_level(logging.INFO):
+        result = asyncio.run(monitor._check_price(rule))
+
+    assert result is None
+    assert "[实时行情] 600519 所有数据源均失败: [efinance] 失败: efinance timeout" in caplog.text
 
 
 def test_pipeline_logs_disabled_realtime_once_without_fetching_quote(caplog):
