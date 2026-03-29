@@ -445,6 +445,21 @@ class SerpAPISearchProvider(BaseSearchProvider):
         ".xlsx",
         ".csv",
     )
+    _SKIPPED_CONTENT_FETCH_QUERY_KEYS = {
+        "attachment",
+        "attachment_file",
+        "doc",
+        "document",
+        "download",
+        "download_file",
+        "file",
+        "file_name",
+        "filename",
+        "file_path",
+        "filepath",
+        "resource",
+        "resource_file",
+    }
     
     def __init__(self, api_keys: List[str]):
         super().__init__(api_keys, "SerpAPI")
@@ -760,6 +775,22 @@ class SerpAPISearchProvider(BaseSearchProvider):
         )
 
     @classmethod
+    def _matches_skipped_content_fetch_query_param(
+        cls, key: Any, value: Any
+    ) -> bool:
+        """仅对少数显式附件参数跳过正文抓取，避免误伤普通 HTML 页面。"""
+        normalized_key = cls._normalize_organic_text(key)
+        if not normalized_key:
+            return False
+
+        snake_key = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", normalized_key)
+        canonical_key = re.sub(r"[^a-z0-9]+", "_", snake_key.lower()).strip("_")
+        if canonical_key not in cls._SKIPPED_CONTENT_FETCH_QUERY_KEYS:
+            return False
+
+        return cls._matches_skipped_content_fetch_suffix(value)
+
+    @classmethod
     def _should_fetch_organic_content(
         cls,
         *,
@@ -796,9 +827,7 @@ class SerpAPISearchProvider(BaseSearchProvider):
             return False
 
         for key, value in parse_qsl(parsed_link.query, keep_blank_values=True):
-            if cls._matches_skipped_content_fetch_suffix(
-                key
-            ) or cls._matches_skipped_content_fetch_suffix(value):
+            if cls._matches_skipped_content_fetch_query_param(key, value):
                 return False
 
         return True
