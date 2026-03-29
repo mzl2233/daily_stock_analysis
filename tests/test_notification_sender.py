@@ -214,6 +214,20 @@ class TestFeishuSender(unittest.TestCase):
         self.assertFalse(result)
         self.assertEqual(mock_post.call_count, 2)
 
+    @mock.patch("src.notification_sender.feishu_sender.requests.post")
+    def test_send_with_keyword_that_leaves_too_little_chunk_budget_returns_false(self, mock_post):
+        cfg = _config(
+            feishu_webhook_url="https://feishu.example/hook",
+            feishu_webhook_keyword="abcd",
+            feishu_max_bytes=60,
+        )
+        sender = FeishuSender(cfg)
+
+        result = sender.send_to_feishu("x" * 100)
+
+        self.assertFalse(result)
+        mock_post.assert_not_called()
+
 
 class TestEmailSender(unittest.TestCase):
     """Unit tests for EmailSender (config and receiver logic; send path covered via service)."""

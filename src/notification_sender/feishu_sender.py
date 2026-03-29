@@ -15,7 +15,12 @@ from typing import Any, Dict
 import requests
 
 from src.config import Config
-from src.formatters import format_feishu_markdown, chunk_content_by_max_bytes
+from src.formatters import (
+    MIN_MAX_BYTES,
+    PAGE_MARKER_SAFE_BYTES,
+    chunk_content_by_max_bytes,
+    format_feishu_markdown,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -109,6 +114,14 @@ class FeishuSender:
         # 检查字节长度，超长则分批发送
         content_bytes = len(formatted_content.encode('utf-8')) + keyword_overhead
         if content_bytes > max_bytes:
+            min_chunk_bytes = MIN_MAX_BYTES + PAGE_MARKER_SAFE_BYTES
+            if effective_max_bytes < min_chunk_bytes:
+                logger.error(
+                    "飞书关键词过长，剩余分片预算(%s字节)不足以安全分页发送，至少需要 %s 字节",
+                    effective_max_bytes,
+                    min_chunk_bytes,
+                )
+                return False
             logger.info(f"飞书消息内容超长({content_bytes}字节/{len(content)}字符)，将分批发送")
             return self._send_feishu_chunked(formatted_content, effective_max_bytes)
         
