@@ -80,6 +80,8 @@
 1. 进入仓库 `Settings` → `Secrets and variables` → `Actions`
 2. **Secrets**（点击 `New repository secret`）：存放敏感信息
    - `GEMINI_API_KEY`
+   - `DEEPSEEK_API_KEY`
+   - `AIHUBMIX_KEY`
    - `OPENAI_API_KEY`
    - `TELEGRAM_BOT_TOKEN`
    - 各类 Webhook URL
@@ -87,6 +89,9 @@
    - `STOCK_LIST`
    - `GEMINI_MODEL`
    - `REPORT_TYPE`
+   - `LLM_CHANNELS`、`LLM_{NAME}_BASE_URL`、`LLM_{NAME}_MODELS`
+
+如果你在 GitHub Actions 使用 `LLM_CHANNELS=deepseek,aihubmix` 这类常见 provider 渠道，不必把真实 `LLM_DEEPSEEK_API_KEY` / `LLM_AIHUBMIX_API_KEY` 写进默认 `.env`；把真实 Key 放在 `DEEPSEEK_API_KEY`、`AIHUBMIX_KEY`（或 `OPENAI_API_KEY`）即可。自定义渠道名仍建议改用 `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`。
 
 ---
 
@@ -124,7 +129,7 @@ PROXY_PORT=10809
 
 **Q: 配置了 GEMINI_API_KEY 和 LLM_CHANNELS，为什么只用渠道？**
 
-系统按优先级只取一种：`LITELLM_CONFIG` (YAML) > `LLM_CHANNELS` > legacy keys。一旦配置了渠道或 YAML，legacy 区域（`GEMINI_API_KEY` 等）不参与解析。
+系统按优先级只取一种：`LITELLM_CONFIG` (YAML) > `LLM_CHANNELS` > legacy keys。区别在于：当你使用 `deepseek`、`aihubmix`、`openai`、`gemini`、`anthropic` 这类常见渠道名时，如果没写 `LLM_{NAME}_API_KEY(S)`，渠道模式会安全回退读取对应 legacy Secrets，主要用于兼容 GitHub Actions 的默认 secret 名；自定义渠道名不会自动回退。
 
 **Q: test_env 输出 ✗ 未配置任何 LLM 怎么办？**
 
@@ -132,7 +137,7 @@ PROXY_PORT=10809
 
 **Q: 如何同时使用多个模型（如 AIHubmix + DeepSeek + Gemini）？**
 
-使用渠道模式：设置 `LLM_CHANNELS=aihubmix,deepseek,gemini`，并配置各渠道的 `LLM_{NAME}_BASE_URL`、`LLM_{NAME}_API_KEY`、`LLM_{NAME}_MODELS`。也可在 Web 设置页 → AI 模型 → 渠道编辑器中可视化配置。
+使用渠道模式：设置 `LLM_CHANNELS=aihubmix,deepseek,gemini`，并配置各渠道的 `LLM_{NAME}_BASE_URL`、`LLM_{NAME}_MODELS`，本地 / Docker 再补 `LLM_{NAME}_API_KEY(S)`；若在 GitHub Actions 用默认 env 模板，真实 Key 可继续放 `AIHUBMIX_KEY`、`DEEPSEEK_API_KEY`、`GEMINI_API_KEY`。也可在 Web 设置页 → AI 模型 → 渠道编辑器中可视化配置。
 
 ---
 

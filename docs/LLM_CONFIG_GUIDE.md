@@ -79,11 +79,13 @@ LITELLM_MODEL=ollama/qwen3:8b
 LLM_CHANNELS=deepseek,aihubmix
 
 # 2. 渠道一：配置 DeepSeek 官方
+# 本地 / Docker 推荐直接写渠道专属 Key：
 LLM_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 LLM_DEEPSEEK_API_KEY=sk-1111111111111
 LLM_DEEPSEEK_MODELS=deepseek-chat,deepseek-reasoner
 
 # 3. 渠道二：配置一个常用的聚合中转 API
+# 本地 / Docker 推荐直接写渠道专属 Key：
 LLM_AIHUBMIX_BASE_URL=https://api.aihubmix.com/v1
 LLM_AIHUBMIX_API_KEY=sk-2222222222222
 LLM_AIHUBMIX_MODELS=gpt-4o-mini,claude-3-5-sonnet
@@ -116,6 +118,10 @@ LITELLM_MODEL=ollama/qwen3:8b
 - Web 设置页里的主模型、Agent 主模型、Fallback、Vision 下拉会保留这个值原样展示，不会再错误改写成 `openai/minimax/<模型名>`。
 
 > **致命避坑说明**：如果你启用了 `LLM_CHANNELS`，那么你直接写在外面的 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY` 将**全部失效（系统一律无视）**！二者**选其一即可**，千万不要既写了新手模式又写了渠道模式结果产生冲突。
+
+> **GitHub Actions 兼容说明**：渠道模式仍优先于 legacy 模式，但常见 provider 渠道在缺少 `LLM_{NAME}_API_KEY(S)` 时，会按渠道名/官方域名安全回退读取已有 Secrets：`deepseek -> DEEPSEEK_API_KEY(S)`、`aihubmix -> AIHUBMIX_KEY / OPENAI_API_KEY(S)`、`openai -> OPENAI_API_KEY(S)`、`gemini/vertex -> GEMINI_API_KEY(S)`、`anthropic/claude -> ANTHROPIC_API_KEY(S)`。这意味着你可以继续使用默认 `.env` 中的非敏感渠道结构，把真实 Key 放在 GitHub Secrets 里，而不用把真实 `LLM_DEEPSEEK_API_KEY`、`LLM_AIHUBMIX_API_KEY` 写进仓库配置。
+>
+> **边界说明**：这个回退只覆盖常见 provider 渠道名；像 `my_proxy`、`corp_gateway` 这类自定义渠道名在 GitHub Actions 中仍建议改用 `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`，避免 secret 名与渠道名无法自动对齐。
 
 ---
 
@@ -150,6 +156,30 @@ model_list:
 ```
 
 ### GitHub Actions配置说明
+
+#### 渠道模式（推荐给不想暴露真实 Key 的用户）
+
+默认 `.env` / Variables 里只保留非敏感结构，例如：
+
+```env
+LLM_CHANNELS=deepseek,aihubmix
+LLM_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+LLM_DEEPSEEK_MODELS=deepseek-chat,deepseek-reasoner
+LLM_AIHUBMIX_BASE_URL=https://api.aihubmix.com/v1
+LLM_AIHUBMIX_MODELS=gpt-4o-mini,claude-3-5-sonnet
+LITELLM_MODEL=deepseek/deepseek-chat
+AGENT_LITELLM_MODEL=deepseek/deepseek-reasoner
+LITELLM_FALLBACK_MODELS=openai/gpt-4o-mini,anthropic/claude-3-5-sonnet
+```
+
+真实 Key 放到 GitHub Secrets：
+
+- `DEEPSEEK_API_KEY`
+- `AIHUBMIX_KEY`（或 `OPENAI_API_KEY`，按你的渠道实际用途）
+- `GEMINI_API_KEY`
+- `ANTHROPIC_API_KEY`
+
+这样无需改 workflow，也无需把真实 `LLM_DEEPSEEK_API_KEY` / `LLM_AIHUBMIX_API_KEY` 写进默认 `.env`。若你使用的是自定义渠道名，则请改用下面的 YAML 高级配置。
 
 1. `Settings` → `Secrets and variables` → `Actions` → `Secret`标签页下的`New repository secret` 或者 `Variables`标签页下的`New repository variable`
 
@@ -200,7 +230,7 @@ VISION_PROVIDER_PRIORITY=gemini,anthropic,openai
 | 遇到了什么诡异报错？ | 罪魁祸首可能是啥？ | 该怎么收拾它？ |
 |----------------------|----------------------|------------------|
 | **屏幕蹦出一句 LLM_MODEL 未配置** | 系统不知道你到底想用哪家的哪个模型 | 在 `.env` 中写上一句明白话：`LITELLM_MODEL=provider/你的模型名`。比如 `openai/gpt-4o-mini` |
-| **我写了好几家的Key，为什么死活只有一个生效？修改还没用？** | 你把 **极简模式** 和 **渠道模式** 混着写了！ | 想好一条路走到黑——只要简单就删掉 `LLM_CHANNELS` 开头的；想要丰富备用切换就要全部转投到 `LLM_CHANNELS` 下的编制里。 |
+| **我写了好几家的Key，为什么死活只有一个生效？修改还没用？** | 大概率是模式混用，或渠道名和 Secret 名没对齐。 | 本地 / Docker 请优先直接写 `LLM_{NAME}_API_KEY(S)`；GitHub Actions 下，`deepseek` / `aihubmix` / `openai` / `gemini` / `anthropic` 等常见渠道可复用对应 legacy Secrets；自定义渠道请改用 `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`。 |
 | **错误码报 400 或 401 或 Invalid API Key** | API Key 填错、少复制了一截、账号充值没到账、或者模型名字敲错（极度常见）。 | 1. 检查复制的 Key 前后是否有误填空格。<br> 2. 检查 Base URL 最后是不是少了一个 `/v1`。<br> 3. 检查模型名是否少写了 `openai/` 之类的前缀！ |
 | **转圈转不停，最后报 Timeout / ConnectionRefused 等** | 1. 在国内使用国外原版（像 Google、OpenAI），没开代理被墙了。<br>2. 你买的云服务器压根不能出境。 | 非常推荐使用**国内官方**（如DeepSeek、阿里）或者各种**兼容 OpenAI 的聚合中转接口**。因为中转站把网络问题帮你解决好了。 |
 | **Ollama 报 404、`Could not get model info` 或 `api/generate/api/show`** | 误用 `OPENAI_BASE_URL` 配置 Ollama，LiteLLM 会错误拼接 URL | 改用 `OLLAMA_API_BASE=http://localhost:11434` 或渠道模式（`LLM_CHANNELS=ollama` + `LLM_OLLAMA_BASE_URL`） |

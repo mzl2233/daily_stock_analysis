@@ -122,6 +122,131 @@ class LLMChannelConfigTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_channel_specific_api_key_takes_precedence_over_legacy_key(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        env = {
+            "LLM_CHANNELS": "deepseek",
+            "LLM_DEEPSEEK_BASE_URL": "https://api.deepseek.com/v1",
+            "LLM_DEEPSEEK_API_KEY": "sk-channel-key",
+            "LLM_DEEPSEEK_MODELS": "deepseek-chat",
+            "DEEPSEEK_API_KEY": "sk-legacy-key",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.llm_models_source, "llm_channels")
+        self.assertEqual(config.llm_channels[0]["api_keys"], ["sk-channel-key"])
+        self.assertEqual(config.llm_model_list[0]["litellm_params"]["api_key"], "sk-channel-key")
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_deepseek_channel_falls_back_to_legacy_deepseek_key(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        env = {
+            "LLM_CHANNELS": "deepseek",
+            "LLM_DEEPSEEK_BASE_URL": "https://api.deepseek.com/v1",
+            "LLM_DEEPSEEK_MODELS": "deepseek-chat,deepseek-reasoner",
+            "DEEPSEEK_API_KEY": "sk-deepseek-legacy",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.llm_models_source, "llm_channels")
+        self.assertEqual(config.llm_channels[0]["api_keys"], ["sk-deepseek-legacy"])
+        self.assertEqual(
+            config.llm_channels[0]["models"],
+            ["deepseek/deepseek-chat", "deepseek/deepseek-reasoner"],
+        )
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_aihubmix_channel_falls_back_to_legacy_aihubmix_key(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        env = {
+            "LLM_CHANNELS": "aihubmix",
+            "LLM_AIHUBMIX_BASE_URL": "https://api.aihubmix.com/v1",
+            "LLM_AIHUBMIX_MODELS": "gpt-4o-mini",
+            "AIHUBMIX_KEY": "sk-aihubmix-legacy",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.llm_models_source, "llm_channels")
+        self.assertEqual(config.llm_channels[0]["api_keys"], ["sk-aihubmix-legacy"])
+        params = config.llm_model_list[0]["litellm_params"]
+        self.assertEqual(params["api_key"], "sk-aihubmix-legacy")
+        self.assertEqual(params["extra_headers"]["APP-Code"], "GPIJ3886")
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_openai_channel_falls_back_to_legacy_openai_key(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        env = {
+            "LLM_CHANNELS": "openai",
+            "LLM_OPENAI_BASE_URL": "https://api.openai.com/v1",
+            "LLM_OPENAI_MODELS": "gpt-4o-mini",
+            "OPENAI_API_KEY": "sk-openai-legacy",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.llm_models_source, "llm_channels")
+        self.assertEqual(config.llm_channels[0]["api_keys"], ["sk-openai-legacy"])
+        self.assertEqual(config.llm_channels[0]["models"], ["openai/gpt-4o-mini"])
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_gemini_channel_falls_back_to_legacy_gemini_key(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        env = {
+            "LLM_CHANNELS": "gemini",
+            "LLM_GEMINI_MODELS": "gemini-2.5-flash",
+            "GEMINI_API_KEY": "sk-gemini-legacy",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.llm_models_source, "llm_channels")
+        self.assertEqual(config.llm_channels[0]["api_keys"], ["sk-gemini-legacy"])
+        self.assertEqual(config.llm_channels[0]["models"], ["gemini/gemini-2.5-flash"])
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_anthropic_channel_falls_back_to_legacy_anthropic_key(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        env = {
+            "LLM_CHANNELS": "claude",
+            "LLM_CLAUDE_MODELS": "claude-3-5-sonnet",
+            "ANTHROPIC_API_KEY": "sk-anthropic-legacy",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.llm_models_source, "llm_channels")
+        self.assertEqual(config.llm_channels[0]["protocol"], "anthropic")
+        self.assertEqual(config.llm_channels[0]["api_keys"], ["sk-anthropic-legacy"])
+        self.assertEqual(config.llm_channels[0]["models"], ["anthropic/claude-3-5-sonnet"])
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_custom_openai_compatible_channel_does_not_fall_back_to_legacy_keys(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        env = {
+            "LLM_CHANNELS": "my_proxy",
+            "LLM_MY_PROXY_PROTOCOL": "openai",
+            "LLM_MY_PROXY_BASE_URL": "https://proxy.example.com/v1",
+            "LLM_MY_PROXY_MODELS": "gpt-4o-mini",
+            "OPENAI_API_KEY": "sk-openai-legacy",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.llm_channels, [])
+        self.assertEqual(config.llm_models_source, "legacy_env")
+        self.assertEqual(config.llm_model_list[0]["model_name"], "__legacy_openai__")
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
     def test_llm_temperature_falls_back_to_legacy_provider_temperature(self, _mock_parse_yaml, _mock_setup_env) -> None:
         env = {
             "GEMINI_API_KEY": "secret-key-value",

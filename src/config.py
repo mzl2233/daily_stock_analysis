@@ -68,6 +68,62 @@ def parse_env_bool(value: Optional[str], default: bool = False) -> bool:
     return normalized not in _FALSEY_ENV_VALUES
 
 
+def parse_env_csv_list(value: Optional[str]) -> List[str]:
+    """Parse a comma-separated env value into a trimmed list."""
+    return [item.strip() for item in (value or "").split(',') if item.strip()]
+
+
+def read_env_key_list(multi_var: str, single_var: Optional[str] = None) -> Tuple[List[str], Optional[str]]:
+    """Read multi/single API key env vars with source tracking."""
+    keys = parse_env_csv_list(os.getenv(multi_var, ''))
+    if keys:
+        return keys, multi_var
+    if single_var:
+        single_key = os.getenv(single_var, '').strip()
+        if single_key:
+            return [single_key], single_var
+    return [], None
+
+
+def resolve_channel_legacy_api_keys(channel_name: str, base_url: Optional[str]) -> Tuple[List[str], Optional[str]]:
+    """Map well-known channel names/hosts to legacy provider secrets.
+
+    This keeps local/Docker channel-specific env vars as the primary source, but
+    allows common provider channels in GitHub Actions to reuse existing legacy
+    secret names without writing real keys into the default `.env`.
+    """
+    normalized_name = canonicalize_llm_channel_protocol(channel_name)
+    raw_name = (channel_name or "").strip().lower()
+    host = (urlparse(base_url or "").hostname or "").lower()
+
+    if "aihubmix.com" in host or raw_name == "aihubmix":
+        openai_keys, openai_source = read_env_key_list('OPENAI_API_KEYS')
+        if openai_keys:
+            return openai_keys, openai_source
+        aihubmix_key = os.getenv('AIHUBMIX_KEY', '').strip()
+        if aihubmix_key:
+            return [aihubmix_key], 'AIHUBMIX_KEY'
+        return read_env_key_list('OPENAI_API_KEYS', 'OPENAI_API_KEY')
+
+    if "deepseek.com" in host or normalized_name == "deepseek":
+        return read_env_key_list('DEEPSEEK_API_KEYS', 'DEEPSEEK_API_KEY')
+
+    if (
+        normalized_name in {"gemini", "vertex_ai"}
+        or "generativelanguage.googleapis.com" in host
+        or "aiplatform.googleapis.com" in host
+    ):
+        return read_env_key_list('GEMINI_API_KEYS', 'GEMINI_API_KEY')
+
+    if "anthropic.com" in host or normalized_name == "anthropic":
+        return read_env_key_list('ANTHROPIC_API_KEYS', 'ANTHROPIC_API_KEY')
+
+    if "openai.com" in host or normalized_name == "openai":
+        return read_env_key_list('OPENAI_API_KEYS', 'OPENAI_API_KEY')
+
+    return [], None
+
+
 def parse_env_int(
     value: Optional[str],
     default: int,
@@ -873,22 +929,13 @@ class Config:
         
         # === LiteLLM multi-key parsing ===
         # GEMINI_API_KEYS (comma-separated) > GEMINI_API_KEY (single)
-        _gemini_keys_raw = os.getenv('GEMINI_API_KEYS', '')
-        gemini_api_keys = [k.strip() for k in _gemini_keys_raw.split(',') if k.strip()]
-        _single_gemini = os.getenv('GEMINI_API_KEY', '').strip()
-        if not gemini_api_keys and _single_gemini:
-            gemini_api_keys = [_single_gemini]
+        gemini_api_keys, _ = read_env_key_list('GEMINI_API_KEYS', 'GEMINI_API_KEY')
 
         # ANTHROPIC_API_KEYS > ANTHROPIC_API_KEY
-        _anthropic_keys_raw = os.getenv('ANTHROPIC_API_KEYS', '')
-        anthropic_api_keys = [k.strip() for k in _anthropic_keys_raw.split(',') if k.strip()]
-        _single_anthropic = os.getenv('ANTHROPIC_API_KEY', '').strip()
-        if not anthropic_api_keys and _single_anthropic:
-            anthropic_api_keys = [_single_anthropic]
+        anthropic_api_keys, _ = read_env_key_list('ANTHROPIC_API_KEYS', 'ANTHROPIC_API_KEY')
 
         # OPENAI_API_KEYS > AIHUBMIX_KEY > OPENAI_API_KEY
-        _openai_keys_raw = os.getenv('OPENAI_API_KEYS', '')
-        openai_api_keys = [k.strip() for k in _openai_keys_raw.split(',') if k.strip()]
+        openai_api_keys, _ = read_env_key_list('OPENAI_API_KEYS')
         if not openai_api_keys:
             _aihubmix = os.getenv('AIHUBMIX_KEY', '').strip()
             _single_openai = os.getenv('OPENAI_API_KEY', '').strip()
@@ -897,12 +944,7 @@ class Config:
                 openai_api_keys = [_fallback_key]
 
         # DEEPSEEK_API_KEYS > DEEPSEEK_API_KEY (independent from OpenAI-compatible layer)
-        _deepseek_keys_raw = os.getenv('DEEPSEEK_API_KEYS', '')
-        deepseek_api_keys = [k.strip() for k in _deepseek_keys_raw.split(',') if k.strip()]
-        if not deepseek_api_keys:
-            _single_deepseek = os.getenv('DEEPSEEK_API_KEY', '').strip()
-            if _single_deepseek:
-                deepseek_api_keys = [_single_deepseek]
+        deepseek_api_keys, _ = read_env_key_list('DEEPSEEK_API_KEYS', 'DEEPSEEK_API_KEY')
 
         # LITELLM_MODEL: explicit config takes precedence; else infer from available keys
         litellm_model = os.getenv('LITELLM_MODEL', '').strip()
@@ -1430,8 +1472,7 @@ class Config:
             enabled = parse_env_bool(os.getenv(f'LLM_{ch_upper}_ENABLED'), default=True)
 
             # API keys: LLM_{NAME}_API_KEYS (multi) > LLM_{NAME}_API_KEY (single)
-            api_keys_raw = os.getenv(f'LLM_{ch_upper}_API_KEYS', '')
-            api_keys = [k.strip() for k in api_keys_raw.split(',') if k.strip()]
+            api_keys = parse_env_csv_list(os.getenv(f'LLM_{ch_upper}_API_KEYS', ''))
             if not api_keys:
                 single_key = os.getenv(f'LLM_{ch_upper}_API_KEY', '').strip()
                 if single_key:
@@ -1466,6 +1507,14 @@ class Config:
 
             if not api_keys and channel_allows_empty_api_key(protocol, base_url):
                 api_keys = [""]
+            if not api_keys:
+                api_keys, legacy_source = resolve_channel_legacy_api_keys(ch_name, base_url)
+                if api_keys and legacy_source:
+                    _logger.info(
+                        "LLM channel '%s': using legacy API key fallback from %s",
+                        ch_name,
+                        legacy_source,
+                    )
 
             if not api_keys:
                 _logger.warning(f"LLM channel '{ch_name}': no API key configured, skipped")

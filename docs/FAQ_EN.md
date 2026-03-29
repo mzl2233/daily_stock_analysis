@@ -78,6 +78,8 @@ This document compiles common issues encountered by users and their solutions.
 1. Go to repo `Settings` → `Secrets and variables` → `Actions`
 2. **Secrets** (click `New repository secret`): Store sensitive information
    - `GEMINI_API_KEY`
+   - `DEEPSEEK_API_KEY`
+   - `AIHUBMIX_KEY`
    - `OPENAI_API_KEY`
    - `TELEGRAM_BOT_TOKEN`
    - Various Webhook URLs
@@ -85,6 +87,9 @@ This document compiles common issues encountered by users and their solutions.
    - `STOCK_LIST`
    - `GEMINI_MODEL`
    - `REPORT_TYPE`
+   - `LLM_CHANNELS`, `LLM_{NAME}_BASE_URL`, `LLM_{NAME}_MODELS`
+
+If you run `LLM_CHANNELS=deepseek,aihubmix` in GitHub Actions, you do not need to put real `LLM_DEEPSEEK_API_KEY` / `LLM_AIHUBMIX_API_KEY` values into the default `.env`. Put the real keys in `DEEPSEEK_API_KEY` and `AIHUBMIX_KEY` (or `OPENAI_API_KEY`) instead. Custom channel names should still use `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`.
 
 ---
 
@@ -122,7 +127,7 @@ PROXY_PORT=10809
 
 **Q: Configured both GEMINI_API_KEY and LLM_CHANNELS, why does it only use channels?**
 
-The system uses exactly one mode by priority: `LITELLM_CONFIG` (YAML) > `LLM_CHANNELS` > legacy keys. Once channels or YAML are configured, the legacy section (`GEMINI_API_KEY`, etc.) is not used.
+The system still uses exactly one mode by priority: `LITELLM_CONFIG` (YAML) > `LLM_CHANNELS` > legacy keys. The nuance is that well-known channel names such as `deepseek`, `aihubmix`, `openai`, `gemini`, and `anthropic` can now safely fall back to matching legacy Secrets when `LLM_{NAME}_API_KEY(S)` is missing, mainly to support GitHub Actions. Custom channel names do not auto-fallback.
 
 **Q: test_env outputs ✗ No LLM configured, what to do?**
 
@@ -130,7 +135,7 @@ Configure `LITELLM_CONFIG` / `LLM_CHANNELS` or at least one `*_API_KEY` (e.g. `G
 
 **Q: How to use multiple models at once (e.g. AIHubmix + DeepSeek + Gemini)?**
 
-Use channel mode: set `LLM_CHANNELS=aihubmix,deepseek,gemini` and configure each channel's `LLM_{NAME}_BASE_URL`, `LLM_{NAME}_API_KEY`, `LLM_{NAME}_MODELS`. You can also configure visually in Web Settings → AI Model → Channel Editor.
+Use channel mode: set `LLM_CHANNELS=aihubmix,deepseek,gemini` and configure each channel's `LLM_{NAME}_BASE_URL` and `LLM_{NAME}_MODELS`; for local / Docker add `LLM_{NAME}_API_KEY(S)` directly, while in GitHub Actions you can keep using `AIHUBMIX_KEY`, `DEEPSEEK_API_KEY`, and `GEMINI_API_KEY` for the real secrets. You can also configure visually in Web Settings → AI Model → Channel Editor.
 
 ---
 

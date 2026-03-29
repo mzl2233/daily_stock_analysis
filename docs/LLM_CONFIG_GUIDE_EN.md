@@ -79,11 +79,13 @@ If you prefer modifying files, configuring this in the `.env` file is also very 
 LLM_CHANNELS=deepseek,aihubmix
 
 # 2. Channel 1: Configure Official DeepSeek
+# For local / Docker runs, the channel-specific key is still the clearest option:
 LLM_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 LLM_DEEPSEEK_API_KEY=sk-1111111111111
 LLM_DEEPSEEK_MODELS=deepseek-chat,deepseek-reasoner
 
 # 3. Channel 2: Configure a common relay/proxy API
+# For local / Docker runs, the channel-specific key is still the clearest option:
 LLM_AIHUBMIX_BASE_URL=https://api.aihubmix.com/v1
 LLM_AIHUBMIX_API_KEY=sk-2222222222222
 LLM_AIHUBMIX_MODELS=gpt-4o-mini,claude-3-5-sonnet
@@ -116,6 +118,10 @@ LITELLM_MODEL=ollama/qwen3:8b
 - The Web settings page now keeps that value unchanged in Primary, Agent Primary, Fallback, and Vision selectors instead of rewriting it to `openai/minimax/<model-name>`.
 
 > **Critical Warning**: If you enable `LLM_CHANNELS`, any standard `DEEPSEEK_API_KEY` or `OPENAI_API_KEY` declared independently will be **completely ignored**. **Use only one mode** to prevent configuration conflicts.
+
+> **GitHub Actions Compatibility**: Channels mode still wins over legacy mode, but well-known provider channels can now safely reuse existing Secrets when `LLM_{NAME}_API_KEY(S)` is absent: `deepseek -> DEEPSEEK_API_KEY(S)`, `aihubmix -> AIHUBMIX_KEY / OPENAI_API_KEY(S)`, `openai -> OPENAI_API_KEY(S)`, `gemini/vertex -> GEMINI_API_KEY(S)`, `anthropic/claude -> ANTHROPIC_API_KEY(S)`. This lets you keep only the non-sensitive channel structure in the default `.env` and store real keys in GitHub Secrets instead of writing real `LLM_DEEPSEEK_API_KEY` / `LLM_AIHUBMIX_API_KEY` values into repo config.
+>
+> **Boundary**: This fallback only applies to common provider channel names / official hosts. Custom channel names such as `my_proxy` or `corp_gateway` should still use `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML` in GitHub Actions.
 
 ---
 
@@ -151,6 +157,34 @@ model_list:
 
 ---
 
+## GitHub Actions Notes
+
+### Channels Mode Without Exposing Real Keys
+
+Keep only the non-sensitive channel structure in the default `.env` / GitHub Variables:
+
+```env
+LLM_CHANNELS=deepseek,aihubmix
+LLM_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+LLM_DEEPSEEK_MODELS=deepseek-chat,deepseek-reasoner
+LLM_AIHUBMIX_BASE_URL=https://api.aihubmix.com/v1
+LLM_AIHUBMIX_MODELS=gpt-4o-mini,claude-3-5-sonnet
+LITELLM_MODEL=deepseek/deepseek-chat
+AGENT_LITELLM_MODEL=deepseek/deepseek-reasoner
+LITELLM_FALLBACK_MODELS=openai/gpt-4o-mini,anthropic/claude-3-5-sonnet
+```
+
+Store the real keys in GitHub Secrets:
+
+- `DEEPSEEK_API_KEY`
+- `AIHUBMIX_KEY` (or `OPENAI_API_KEY`, depending on the actual endpoint you use)
+- `GEMINI_API_KEY`
+- `ANTHROPIC_API_KEY`
+
+This works without changing the workflow and avoids writing real `LLM_DEEPSEEK_API_KEY` / `LLM_AIHUBMIX_API_KEY` values into the default `.env`. For custom channel names, prefer `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`.
+
+---
+
 ## Advanced Feature: Vision Model Config
 
 Certain specific features in our system (like uploading a stock chart screenshot to extract the stock code) require models capable of computer vision. You need to assign a dedicated vision model in your `.env`.
@@ -182,7 +216,7 @@ Afraid you got the config wrong? Type the following commands in your terminal to
 | Weird Error You Got? | Likely Culprit | How to Fix It? |
 |----------------------|----------------|----------------|
 | **"LLM_MODEL is not configured" pops up** | The system doesn't know which brand's model you want to use. | Add a clear instruction in `.env`: `LITELLM_MODEL=provider/your_model_name`. Example: `openai/gpt-4o-mini`. |
-| **I added multiple provider Keys, why is only one working?** | You mixed the **Simple Mode** and **Channels Mode**! | Choose one path. For simple setups, delete anything starting with `LLM_CHANNELS`. To use multi-model fallbacks, migrate all your Keys into the `LLM_CHANNELS` setup. |
+| **I added multiple provider Keys, why is only one working?** | Usually you mixed config modes, or your channel name does not match a supported fallback mapping. | For local / Docker, prefer explicit `LLM_{NAME}_API_KEY(S)`. In GitHub Actions, common provider channel names such as `deepseek` / `aihubmix` / `openai` / `gemini` / `anthropic` can reuse matching legacy Secrets. Custom channel names should switch to `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`. |
 | **Returns 400, 401, or Invalid API Key** | The API Key is wrong, copied incompletely, account lacks credits, or you mistyped the model name (extremely common). | 1. Ensure there are no spaces at the start/end of your Key.<br> 2. Ensure your Base URL ends with `/v1`.<br> 3. Check if you forgot the `openai/` prefix on the model name! |
 | **Spins endlessly, eventually hits Timeout/ConnectionRefused** | You are using restricted APIs (like Google/OpenAI) in a blocked region without a proxy, or your cloud server lacks external internet access. | Highly recommend using **official regional APIs** (like DeepSeek) or **OpenAI-compatible relay platforms**. Third-party platforms bypass these network constraints. |
 | **Ollama returns 404, `Could not get model info`, or `api/generate/api/show`** | Using `OPENAI_BASE_URL` for Ollama; LiteLLM incorrectly concatenates URLs | Use `OLLAMA_API_BASE=http://localhost:11434` or channel mode (`LLM_CHANNELS=ollama` + `LLM_OLLAMA_BASE_URL`) instead |
