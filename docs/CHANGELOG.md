@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - [修复] 🐳 **Docker WebUI 运行时优先复用预构建静态资源** — `prepare_webui_frontend_assets()` 现在会先检查镜像内已有的 `static/index.html` 是否可直接复用；当容器运行时不包含 `apps/dsa-web` 源码目录且未安装 `npm` 时，也不会误报“未找到前端项目，无法自动构建”，从而恢复 Docker 部署后的 WebUI 打开能力。
 - [修复] 🗓️ **断点续传与 `--dry-run` 改按市场时区和交易日历判断可复用数据**（fixes #880）— 股票数据存在性检查不再直接使用服务器自然日，而是按 A 股 / 港股 / 美股各自市场时区解析“最新可复用交易日”；周末、节假日、跨时区以及盘中 / 盘后场景会统一复用最近已完成交易日，避免误判导致重复抓取或错误跳过。
+- [修复] 🗓️ **断点续传与 `--dry-run` 改按市场时区和交易日历判断可复用数据**（fixes #880）— 股票数据存在性检查不再直接使用服务器自然日，而是按 A 股 / 港股 / 美股各自市场时区解析“最新可复用交易日”；周末、节假日、跨时区以及盘中 / 盘后场景会统一复用最近已完成交易日，避免误判导致重复抓取或错误跳过。实现范围：`src/core/pipeline.py`、`src/core/trading_calendar.py`；回归测试：`tests/test_trading_calendar.py`、`tests/test_pipeline_fetch_error.py`、`tests/test_pipeline_prefetch_dry_run.py`。
 
 ## [3.11.0] - 2026-03-27
 
