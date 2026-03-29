@@ -200,6 +200,23 @@ class SystemConfigServiceTestCase(unittest.TestCase):
             )
         )
 
+    def test_validate_no_warning_when_feishu_cloud_doc_credentials_without_webhook(self) -> None:
+        validation = self.service.validate(
+            items=[
+                {"key": "FEISHU_APP_ID", "value": "cli_xxx"},
+                {"key": "FEISHU_APP_SECRET", "value": "secret_xxx"},
+                {"key": "FEISHU_FOLDER_TOKEN", "value": "folder_xxx"},
+            ]
+        )
+        self.assertTrue(validation["valid"])
+        self.assertFalse(
+            any(
+                issue["code"] == "feishu_mode_mismatch"
+                and issue["severity"] == "warning"
+                for issue in validation["issues"]
+            )
+        )
+
     def test_update_persists_public_searxng_toggle(self) -> None:
         old_version = self.manager.get_config_version()
         response = self.service.update(

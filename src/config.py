@@ -2145,11 +2145,21 @@ class Config:
                 field="WECHAT_WEBHOOK_URL",
             ))
 
-        has_feishu_app_credentials = bool(
-            (self.feishu_app_id or "").strip()
-            or (self.feishu_app_secret or "").strip()
+        has_feishu_app_id = bool((self.feishu_app_id or "").strip())
+        has_feishu_app_secret = bool((self.feishu_app_secret or "").strip())
+        has_feishu_app_credentials = has_feishu_app_id or has_feishu_app_secret
+        has_feishu_doc_token = bool((self.feishu_folder_token or "").strip())
+        has_feishu_full_cloud_doc_credentials = (
+            has_feishu_app_id
+            and has_feishu_app_secret
+            and has_feishu_doc_token
         )
-        if has_feishu_app_credentials and not self.feishu_webhook_url and not self.feishu_stream_enabled:
+        if (
+            has_feishu_app_credentials
+            and not has_feishu_full_cloud_doc_credentials
+            and not self.feishu_webhook_url
+            and not self.feishu_stream_enabled
+        ):
             issues.append(ConfigIssue(
                 severity="warning",
                 message=(

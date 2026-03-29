@@ -800,17 +800,26 @@ class SystemConfigService:
             "FEISHU_WEBHOOK_URL",
             "FEISHU_STREAM_ENABLED",
         }
-        has_feishu_app_credentials = bool(
-            (effective_map.get("FEISHU_APP_ID") or "").strip()
-            or (effective_map.get("FEISHU_APP_SECRET") or "").strip()
-        )
+        has_feishu_app_id = bool((effective_map.get("FEISHU_APP_ID") or "").strip())
+        has_feishu_app_secret = bool((effective_map.get("FEISHU_APP_SECRET") or "").strip())
+        has_feishu_app_credentials = has_feishu_app_id or has_feishu_app_secret
         has_feishu_webhook = bool((effective_map.get("FEISHU_WEBHOOK_URL") or "").strip())
+        has_feishu_folder_token = bool((effective_map.get("FEISHU_FOLDER_TOKEN") or "").strip())
+        has_feishu_full_cloud_doc_credentials = (
+            has_feishu_app_id
+            and has_feishu_app_secret
+            and has_feishu_folder_token
+        )
         feishu_stream_enabled = parse_env_bool(
             effective_map.get("FEISHU_STREAM_ENABLED"),
             default=False,
         )
-        if has_feishu_app_credentials and not has_feishu_webhook and not feishu_stream_enabled and (
-            updated_keys & feishu_relevant_keys
+        if (
+            has_feishu_app_credentials
+            and not has_feishu_full_cloud_doc_credentials
+            and not has_feishu_webhook
+            and not feishu_stream_enabled
+            and (updated_keys & feishu_relevant_keys)
         ):
             issues.append(
                 {
