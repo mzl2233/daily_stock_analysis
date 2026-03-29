@@ -98,14 +98,14 @@ def _resolve_stock_from_request(request: ClawBotMessageRequest) -> Optional[str]
     if request.stock_code:
         return _resolve_and_normalize_input(request.stock_code)
 
+    if not _should_use_nl_stock_resolution(request):
+        return None
+
     from src.agent.orchestrator import _extract_stock_code
 
     extracted_code = _extract_stock_code(request.message)
     if extracted_code:
         return _resolve_and_normalize_input(extracted_code)
-
-    if not _should_use_nl_stock_resolution(request):
-        return None
 
     resolved = CommandDispatcher._resolve_stock_code_from_text(request.message)
     if resolved:

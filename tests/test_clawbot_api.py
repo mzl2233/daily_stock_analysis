@@ -154,6 +154,31 @@ def test_clawbot_message_auto_mode_falls_back_to_agent_for_plain_english_text():
     executor.chat.assert_called_once()
 
 
+def test_clawbot_message_auto_mode_skips_ticker_extraction_for_uppercase_english_text():
+    executor = MagicMock()
+    executor.chat.return_value = SimpleNamespace(
+        success=True,
+        content="请提供想分析的股票代码或名称，我再继续。",
+        error=None,
+    )
+    config = SimpleNamespace(is_agent_available=lambda: True)
+
+    with patch("api.v1.endpoints.clawbot.get_config", return_value=config), \
+         patch("api.v1.endpoints.clawbot._build_executor", return_value=executor), \
+         patch("src.agent.orchestrator._extract_stock_code") as extract_stock_code, \
+         patch("api.v1.endpoints.clawbot._handle_sync_analysis") as handle_analysis:
+        response = handle_clawbot_message(
+            ClawBotMessageRequest(message="I NEED ADVICE", mode="auto", user_id="wx_user_004")
+        )
+
+    assert response.mode == "agent"
+    assert response.session_id == "clawbot_wx_user_004"
+    assert response.text == "请提供想分析的股票代码或名称，我再继续。"
+    extract_stock_code.assert_not_called()
+    handle_analysis.assert_not_called()
+    executor.chat.assert_called_once()
+
+
 def test_clawbot_message_returns_consistent_error_when_agent_unavailable():
     config = SimpleNamespace(is_agent_available=lambda: False)
 
