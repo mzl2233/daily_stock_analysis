@@ -1387,7 +1387,9 @@ class GeminiAnalyzer:
                 logger.debug(
                     f"=== {model_name} 完整响应 ({len(response_text)}字符) ===\n{response_text}\n=== End Response ==="
                 )
-                _emit_progress(93, f"{name}：LLM 返回完成，正在解析 JSON")
+                # Keep parser/retry progress monotonic so task progress/message never "goes backward".
+                parse_progress = min(99, 93 + retry_count * 2)
+                _emit_progress(parse_progress, f"{name}：LLM 返回完成，正在解析 JSON")
 
                 # 解析响应
                 result = self._parse_response(response_text, code, name)
@@ -1416,8 +1418,9 @@ class GeminiAnalyzer:
                         missing_fields,
                         retry_count,
                     )
+                    retry_progress = min(99, 92 + retry_count * 2)
                     _emit_progress(
-                        90,
+                        retry_progress,
                         f"{name}：报告字段不完整，正在补全重试（{retry_count}/{max_retries}）",
                     )
                 else:

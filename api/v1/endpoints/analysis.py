@@ -347,11 +347,12 @@ def _handle_sync_analysis(
         )
 
         if result is None:
+            error_message = service.last_error or f"分析股票 {stock_code} 失败"
             raise HTTPException(
                 status_code=500,
                 detail={
                     "error": "analysis_failed",
-                    "message": f"分析股票 {stock_code} 失败"
+                    "message": error_message,
                 }
             )
 

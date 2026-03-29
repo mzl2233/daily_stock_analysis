@@ -141,6 +141,67 @@ class TestAnalyzerGenerateText:
         assert dispatch_calls[0]["stream"] is True
         assert "stream" not in dispatch_calls[1]
 
+    def test_analyze_integrity_retry_keeps_progress_monotonic(self):
+        analyzer = self._make_analyzer()
+        analyzer._config_override = SimpleNamespace(
+            gemini_request_delay=0,
+            report_language="zh",
+            litellm_model="gemini/gemini-2.0-flash",
+            llm_temperature=0.2,
+            report_integrity_enabled=True,
+            report_integrity_retry=1,
+        )
+
+        from src.analyzer import AnalysisResult
+
+        progress_updates = []
+        first_result = AnalysisResult(
+            code="600519",
+            name="贵州茅台",
+            sentiment_score=80,
+            trend_prediction="看多",
+            operation_advice="持有",
+            analysis_summary="首轮结果",
+        )
+        second_result = AnalysisResult(
+            code="600519",
+            name="贵州茅台",
+            sentiment_score=82,
+            trend_prediction="看多",
+            operation_advice="持有",
+            analysis_summary="补全后结果",
+        )
+
+        with patch.object(analyzer, "is_available", return_value=True), \
+             patch.object(analyzer, "_get_analysis_system_prompt", return_value="system"), \
+             patch.object(analyzer, "_format_prompt", return_value="prompt"), \
+             patch.object(
+                 analyzer,
+                 "_call_litellm",
+                 side_effect=[
+                     ("first response", "model-a", {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}),
+                     ("second response", "model-a", {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}),
+                 ],
+             ), \
+             patch.object(analyzer, "_parse_response", side_effect=[first_result, second_result]), \
+             patch.object(analyzer, "_build_market_snapshot", return_value={}), \
+             patch.object(
+                 analyzer,
+                 "_check_content_integrity",
+                 side_effect=[(False, ["analysis_summary"]), (True, [])],
+             ), \
+             patch.object(analyzer, "_build_integrity_retry_prompt", return_value="retry prompt"), \
+             patch("src.analyzer.persist_llm_usage"):
+            result = analyzer.analyze(
+                {"code": "600519", "stock_name": "贵州茅台"},
+                progress_callback=lambda progress, message: progress_updates.append((progress, message)),
+            )
+
+        assert result.analysis_summary == "补全后结果"
+        assert [progress for progress, _ in progress_updates] == [68, 93, 94, 95]
+        assert "补全重试" in progress_updates[2][1]
+        assert "解析 JSON" in progress_updates[3][1]
+
 
 # ---------------------------------------------------------------------------
 # market_analyzer uses generate_text(), not private attributes

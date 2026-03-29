@@ -18,12 +18,14 @@ try:
     from api.app import create_app
     from api.v1.endpoints.analysis import (
         trigger_analysis,
+        _handle_sync_analysis,
         _build_analysis_report,
         _load_sync_fundamental_sources,
     )
 except Exception:  # pragma: no cover - optional dependency environments
     create_app = None
     trigger_analysis = None
+    _handle_sync_analysis = None
     _build_analysis_report = None
     _load_sync_fundamental_sources = None
 
@@ -90,6 +92,34 @@ class AnalysisApiContractTestCase(unittest.TestCase):
 
         self.assertIsNone(result)
         self.assertEqual(service.last_error, "LLM stream interrupted")
+
+    def test_handle_sync_analysis_uses_service_last_error_for_failed_pipeline_result(self) -> None:
+        if _handle_sync_analysis is None:
+            self.skipTest("analysis endpoint helpers unavailable in this environment")
+
+        service_instance = MagicMock()
+        service_instance.analyze_stock.return_value = None
+        service_instance.last_error = "LLM stream interrupted"
+
+        with patch("src.services.analysis_service.AnalysisService", return_value=service_instance):
+            with self.assertRaises(Exception) as ctx:
+                _handle_sync_analysis(
+                    "600519",
+                    SimpleNamespace(
+                        report_type="detailed",
+                        force_refresh=False,
+                        notify=True,
+                    ),
+                )
+
+        self.assertEqual(ctx.exception.status_code, 500)
+        self.assertEqual(
+            ctx.exception.detail,
+            {
+                "error": "analysis_failed",
+                "message": "LLM stream interrupted",
+            },
+        )
 
     def test_build_analysis_response_localizes_placeholder_stock_name_for_english(self) -> None:
         service = AnalysisService()
