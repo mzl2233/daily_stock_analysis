@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - [修复] 🐳 **Docker WebUI 运行时优先复用预构建静态资源** — `prepare_webui_frontend_assets()` 现在会先检查镜像内已有的 `static/index.html` 是否可直接复用；当容器运行时不包含 `apps/dsa-web` 源码目录且未安装 `npm` 时，也不会误报“未找到前端项目，无法自动构建”，从而恢复 Docker 部署后的 WebUI 打开能力。
 - [修复] 📨 **单股推送模式不再并发复用共享通知实例** — `StockAnalysisPipeline.run()` 现在会保留个股分析并发，但把 `SINGLE_STOCK_NOTIFY=true` 下的即时通知挪到结果收集侧串行发送；同时 `_send_single_stock_notification()` 为同一个 pipeline 实例补上实例级临界区，避免直接调用 `process_single_stock(..., single_stock_notify=True)` 时多个线程继续共享同一个 `NotificationService` 进入报告生成与发送链路，导致通知乱序、重复发送或状态污染。
+- [修复] 📨 **单股推送模式不再并发复用共享通知实例** — `StockAnalysisPipeline.run()` 现在会保留个股分析并发，但把 `SINGLE_STOCK_NOTIFY=true` 下的即时通知挪到结果收集侧串行发送；同时 `_send_single_stock_notification()` 为同一个 pipeline 实例补上实例级临界区，避免直接调用 `process_single_stock(..., single_stock_notify=True)` 时多个线程继续共享同一个 `NotificationService` 进入报告生成与发送链路，导致通知乱序、重复发送或状态污染。补充了 `tests/test_pipeline_single_stock_notify.py` 与 `tests/test_pipeline_single_notify_thread_safety.py` 的回归场景以覆盖并发单股推送与直接单股入口的串行化行为。
 
 ## [3.11.0] - 2026-03-27
 
