@@ -116,6 +116,7 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 | `EMAIL_RECEIVERS` | Receiver emails (comma-separated, leave empty to send to yourself) | Optional |
 | `WECHAT_WEBHOOK_URL` | WeChat Work Webhook URL | Optional |
 | `FEISHU_WEBHOOK_URL` | Feishu Webhook URL | Optional |
+| `FEISHU_WEBHOOK_SIGNING_SECRET` | Feishu custom-bot signing secret (optional; does not use FEISHU_APP_SECRET) | Optional |
 | `PUSHPLUS_TOKEN` | PushPlus Token ([Get it here](https://www.pushplus.plus), Chinese push service) | Optional |
 | `SERVERCHAN3_SENDKEY` | ServerChan v3 SendKey (([Get it here](https://sc3.ft07.com/), Mobile app push notification service) ) | Optional |
 | `CUSTOM_WEBHOOK_URLS` | Custom Webhook URLs (supports DingTalk, etc., comma-separated) | Optional |

@@ -352,6 +352,7 @@ Add these Secrets:
 | `GEMINI_API_KEY` | Gemini AI API Key | ✅ |
 | `WECHAT_WEBHOOK_URL` | WeChat Work Bot Webhook | Optional* |
 | `FEISHU_WEBHOOK_URL` | Feishu Bot Webhook | Optional* |
+| `FEISHU_WEBHOOK_SIGNING_SECRET` | Feishu Bot webhook signing secret (optional; leave unset for no signature) | Optional* |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | Optional* |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | Optional* |
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID | Optional* |

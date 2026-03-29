@@ -70,6 +70,7 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 |------------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | WeChat Work Webhook URL | Optional |
 | `FEISHU_WEBHOOK_URL` | Feishu Webhook URL | Optional |
+| `FEISHU_WEBHOOK_SIGNING_SECRET` | Feishu custom-bot signing secret (optional; required only when signature verification is enabled) | Optional |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token (get from @BotFather) | Optional |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | Optional |
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID (for sending to topics) | Optional |

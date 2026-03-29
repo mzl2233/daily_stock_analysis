@@ -113,6 +113,7 @@
 | `EMAIL_RECEIVERS` | 收件人郵箱（多個用逗號分隔，留空則發給自己） | 可選 |
 | `WECHAT_WEBHOOK_URL` | 企業微信 Webhook URL | 可選 |
 | `FEISHU_WEBHOOK_URL` | 飛書 Webhook URL | 可選 |
+| `FEISHU_WEBHOOK_SIGNING_SECRET` | 飛書自定義機器人簽名校驗密鑰（僅簽名場景，未設置則不簽名；不與 FEISHU_APP_SECRET 共用） | 可選 |
 | `PUSHPLUS_TOKEN` | PushPlus Token（[獲取地址](https://www.pushplus.plus)，國內推送服務） | 可選 |
 | `SERVERCHAN3_SENDKEY` | Server酱³ Sendkey（[獲取地址](https://sc3.ft07.com/)，手機軟體推播服務） | 可选 |
 | `CUSTOM_WEBHOOK_URLS` | 自定義 Webhook（支持釘釘等，多個用逗號分隔） | 可選 |
