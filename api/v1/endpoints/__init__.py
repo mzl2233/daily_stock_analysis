@@ -17,6 +17,7 @@ from api.v1.endpoints import (
     system_config,
     auth,
     agent,
+    clawbot,
     usage,
     portfolio,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "system_config",
     "auth",
     "agent",
+    "clawbot",
     "usage",
     "portfolio",
 ]
