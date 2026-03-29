@@ -434,6 +434,7 @@ class Config:
     feishu_app_id: Optional[str] = None
     feishu_app_secret: Optional[str] = None
     feishu_folder_token: Optional[str] = None  # 目标文件夹 Token
+    feishu_webhook_signing_secret: Optional[str] = None
 
     # === 数据源 API Token ===
     tushare_token: Optional[str] = None
@@ -1226,6 +1227,7 @@ class Config:
             slack_webhook_url=os.getenv('SLACK_WEBHOOK_URL'),
             slack_bot_token=os.getenv('SLACK_BOT_TOKEN'),
             slack_channel_id=os.getenv('SLACK_CHANNEL_ID'),
+            feishu_webhook_signing_secret=os.getenv('FEISHU_WEBHOOK_SIGNING_SECRET'),
             astrbot_url=os.getenv('ASTRBOT_URL'),
             astrbot_token=os.getenv('ASTRBOT_TOKEN'),
             single_stock_notify=os.getenv('SINGLE_STOCK_NOTIFY', 'false').lower() == 'true',

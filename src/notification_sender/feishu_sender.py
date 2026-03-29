@@ -31,18 +31,20 @@ class FeishuSender:
             config: 配置对象
         """
         self._feishu_url = getattr(config, 'feishu_webhook_url', None)
-        secret = getattr(config, 'feishu_app_secret', None)
-        self._feishu_app_secret = secret.strip() if isinstance(secret, str) else secret
+        secret = getattr(config, 'feishu_webhook_signing_secret', None)
+        if not secret:
+            secret = getattr(config, 'feishu_app_secret', None)
+        self._feishu_webhook_signing_secret = secret.strip() if isinstance(secret, str) else secret
         self._feishu_max_bytes = getattr(config, 'feishu_max_bytes', 20000)
         self._webhook_verify_ssl = getattr(config, 'webhook_verify_ssl', True)
 
     def _with_signature(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """为启用签名校验的飞书自定义机器人补充 timestamp/sign。"""
-        if not self._feishu_app_secret:
+        if not self._feishu_webhook_signing_secret:
             return payload
 
         timestamp = str(int(time.time()))
-        string_to_sign = f"{timestamp}\n{self._feishu_app_secret}"
+        string_to_sign = f"{timestamp}\n{self._feishu_webhook_signing_secret}"
         sign = base64.b64encode(
             hmac.new(
                 string_to_sign.encode("utf-8"),

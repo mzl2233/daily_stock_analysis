@@ -837,6 +837,20 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {},
         "display_order": 12,
     },
+    "FEISHU_WEBHOOK_SIGNING_SECRET": {
+        "title": "Feishu Webhook Signing Secret",
+        "description": "Signing secret for Feishu custom-bot webhook signature verification.",
+        "category": "notification",
+        "data_type": "string",
+        "ui_control": "password",
+        "is_sensitive": True,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": None,
+        "options": [],
+        "validation": {},
+        "display_order": 13,
+    },
     "FEISHU_APP_ID": {
         "title": "Feishu App ID",
         "description": "Feishu app bot App ID (for event-driven bot mode).",
@@ -849,11 +863,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "default_value": None,
         "options": [],
         "validation": {},
-        "display_order": 13,
+        "display_order": 14,
     },
     "FEISHU_APP_SECRET": {
         "title": "Feishu App Secret",
-        "description": "Feishu app bot App Secret; also used as the webhook signing secret when a custom bot enables signature verification.",
+        "description": "Feishu app bot App Secret used for app/Stream integrations.",
         "category": "notification",
         "data_type": "string",
         "ui_control": "password",
@@ -863,7 +877,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "default_value": None,
         "options": [],
         "validation": {},
-        "display_order": 14,
+        "display_order": 15,
     },
     # ------------------------------------------------------------------
     # Notification – Telegram

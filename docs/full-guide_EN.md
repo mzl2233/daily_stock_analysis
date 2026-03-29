@@ -182,7 +182,8 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 | Variable | Description | Required |
 |--------|------|:----:|
 | `WECHAT_WEBHOOK_URL` | WeChat Work Bot Webhook URL | Optional |
-| `FEISHU_WEBHOOK_URL` | Feishu Bot Webhook URL; also requires `FEISHU_APP_SECRET` when custom-bot signature verification is enabled | Optional |
+| `FEISHU_WEBHOOK_URL` | Feishu Bot Webhook URL | Optional |
+| `FEISHU_WEBHOOK_SIGNING_SECRET` | Feishu custom-bot signing secret (optional; separate from app secret) | Optional |
 | `TELEGRAM_BOT_TOKEN` | Telegram Bot Token | Optional |
 | `TELEGRAM_CHAT_ID` | Telegram Chat ID | Optional |
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID | Optional |
@@ -214,7 +215,7 @@ Default schedule: Every weekday at **18:00 (Beijing Time)** automatic execution.
 | Variable | Description | Required |
 |--------|------|:----:|
 | `FEISHU_APP_ID` | Feishu App ID | Optional |
-| `FEISHU_APP_SECRET` | Feishu App Secret; also reused as the signing secret for Feishu custom-bot webhooks | Optional |
+| `FEISHU_APP_SECRET` | Feishu App Secret (used for app / Stream / Cloud Doc integrations) | Optional |
 | `FEISHU_FOLDER_TOKEN` | Feishu Cloud Drive Folder Token | Optional |
 
 > Feishu Cloud Document setup steps:
@@ -470,7 +471,7 @@ crontab -e
 1. Add "Custom Bot" in Feishu group chat
 2. Copy Webhook URL
 3. Set `FEISHU_WEBHOOK_URL`
-4. If the custom bot enables signature verification, also set `FEISHU_APP_SECRET`; the current webhook sender reuses the Feishu app secret as the signing secret
+4. If the custom bot enables signature verification, set `FEISHU_WEBHOOK_SIGNING_SECRET`; if absent, it falls back to `FEISHU_APP_SECRET` for backward compatibility
 
 ### Telegram
 

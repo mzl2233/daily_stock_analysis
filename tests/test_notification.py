@@ -430,7 +430,7 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
     ):
         cfg = _make_config(
             feishu_webhook_url="https://feishu.example",
-            feishu_app_secret="signed-secret",
+            feishu_webhook_signing_secret="signed-secret",
         )
         mock_get_config.return_value = cfg
         mock_post.return_value = _make_response(200, {"code": 0})
