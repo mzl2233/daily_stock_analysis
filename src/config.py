@@ -1850,6 +1850,32 @@ class Config:
                 message="未配置自选股列表 (STOCK_LIST)",
                 field="STOCK_LIST",
             ))
+        elif self.stock_email_groups:
+            configured_stock_set = {
+                (code or "").strip().upper()
+                for code in self.stock_list
+                if (code or "").strip()
+            }
+            missing_group_stocks = list(
+                dict.fromkeys(
+                    stock
+                    for stocks, _emails in self.stock_email_groups
+                    for stock in stocks
+                    if (stock or "").strip()
+                    and stock.strip().upper() not in configured_stock_set
+                )
+            )
+            if missing_group_stocks:
+                issues.append(ConfigIssue(
+                    severity="warning",
+                    message=(
+                        "检测到 STOCK_GROUP_N 中存在未包含在 STOCK_LIST 内的股票："
+                        f"{', '.join(missing_group_stocks[:6])}。"
+                        "STOCK_GROUP_N 仅用于邮件路由，不会扩大分析范围；"
+                        "请先将这些股票加入 STOCK_LIST。"
+                    ),
+                    field="STOCK_GROUP_N",
+                ))
 
         # --- Data sources (informational only) ---
         if not self.tushare_token:

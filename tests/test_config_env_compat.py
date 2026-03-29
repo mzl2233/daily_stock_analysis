@@ -194,6 +194,32 @@ class ConfigEnvCompatibilityTestCase(unittest.TestCase):
         self.assertEqual(config.max_workers, 3)
         self.assertEqual(config.webui_port, 8000)
 
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_stock_email_groups_support_case_insensitive_env_names(
+        self,
+        _mock_parse_yaml,
+        _mock_setup_env,
+    ) -> None:
+        env = {
+            "STOCK_LIST": "600519,300750",
+            "Stock_Group_1": "600519",
+            "Email_Group_1": "user1@example.com",
+            "stock_group_2": "300750",
+            "email_group_2": "user2@example.com",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(
+            config.stock_email_groups,
+            [
+                (["600519"], ["user1@example.com"]),
+                (["300750"], ["user2@example.com"]),
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

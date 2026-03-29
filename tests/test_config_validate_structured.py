@@ -124,6 +124,26 @@ class TestValidateStructuredStockList:
         issues = cfg.validate_structured()
         assert not any(i.field == "STOCK_LIST" for i in issues if i.severity == "error")
 
+    def test_stock_email_groups_outside_stock_list_is_warning(self):
+        cfg = _make_config(
+            stock_list=["600519"],
+            stock_email_groups=[(["600519", "000001"], ["group@example.com"])],
+        )
+        issues = cfg.validate_structured()
+        warning = next(i for i in issues if i.field == "STOCK_GROUP_N")
+        assert warning.severity == "warning"
+        assert "000001" in warning.message
+        assert "邮件路由" in warning.message
+        assert "STOCK_LIST" in warning.message
+
+    def test_stock_email_groups_subset_of_stock_list_has_no_warning(self):
+        cfg = _make_config(
+            stock_list=["600519", "000001"],
+            stock_email_groups=[(["600519"], ["group@example.com"])],
+        )
+        issues = cfg.validate_structured()
+        assert not any(i.field == "STOCK_GROUP_N" for i in issues)
+
 
 # ---------------------------------------------------------------------------
 # validate_structured() — LLM availability (three-tier check)
