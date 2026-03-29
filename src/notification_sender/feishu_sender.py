@@ -32,9 +32,9 @@ class FeishuSender:
         """
         self._feishu_url = getattr(config, 'feishu_webhook_url', None)
         secret = getattr(config, 'feishu_webhook_signing_secret', None)
-        if not secret:
-            secret = getattr(config, 'feishu_app_secret', None)
-        self._feishu_webhook_signing_secret = secret.strip() if isinstance(secret, str) else secret
+        self._feishu_webhook_signing_secret = (
+            secret.strip() if isinstance(secret, str) and secret.strip() else None
+        )
         self._feishu_max_bytes = getattr(config, 'feishu_max_bytes', 20000)
         self._webhook_verify_ssl = getattr(config, 'webhook_verify_ssl', True)
 

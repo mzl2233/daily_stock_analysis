@@ -471,7 +471,7 @@ crontab -e
 1. Add "Custom Bot" in Feishu group chat
 2. Copy Webhook URL
 3. Set `FEISHU_WEBHOOK_URL`
-4. If the custom bot enables signature verification, set `FEISHU_WEBHOOK_SIGNING_SECRET`; if absent, it falls back to `FEISHU_APP_SECRET` for backward compatibility
+4. If the custom bot enables signature verification, set `FEISHU_WEBHOOK_SIGNING_SECRET`; when unset, no signature will be added.
 
 ### Telegram
 

@@ -279,7 +279,7 @@ class TestFeishuSender(unittest.TestCase):
 
     @mock.patch("src.notification_sender.feishu_sender.time.time", return_value=1700000000)
     @mock.patch("src.notification_sender.feishu_sender.requests.post")
-    def test_webhook_signing_falls_back_to_app_secret_for_compatibility(self, mock_post, _mock_time):
+    def test_webhook_signing_skips_when_webhook_signing_secret_missing(self, mock_post, _mock_time):
         mock_post.return_value = _response(200, {"code": 0})
         cfg = _config(
             feishu_webhook_url="https://feishu.example/hook",
@@ -291,10 +291,8 @@ class TestFeishuSender(unittest.TestCase):
 
         self.assertTrue(result)
         payload = mock_post.call_args.kwargs["json"]
-        self.assertEqual(
-            payload["sign"],
-            _expected_feishu_sign("legacy-app-secret", "1700000000"),
-        )
+        self.assertNotIn("timestamp", payload)
+        self.assertNotIn("sign", payload)
 
 
 class TestEmailSender(unittest.TestCase):

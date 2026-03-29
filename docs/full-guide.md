@@ -559,7 +559,7 @@ crontab -e
 1. 在飞书群聊中添加"自定义机器人"
 2. 复制 Webhook URL
 3. 设置 `FEISHU_WEBHOOK_URL`
-4. 如果自定义机器人开启“签名校验”，额外设置 `FEISHU_WEBHOOK_SIGNING_SECRET`；若未设置但已配置 `FEISHU_APP_SECRET`，则退化使用应用 Secret
+4. 如果自定义机器人开启“签名校验”，设置 `FEISHU_WEBHOOK_SIGNING_SECRET`（仅使用该值；未设置不签名）
 
 ### Telegram
 
