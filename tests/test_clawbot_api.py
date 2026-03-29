@@ -5,6 +5,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from tests.litellm_stub import ensure_litellm_stub
 
 ensure_litellm_stub()
@@ -177,6 +179,44 @@ def test_clawbot_message_auto_mode_skips_ticker_extraction_for_uppercase_english
     extract_stock_code.assert_not_called()
     handle_analysis.assert_not_called()
     executor.chat.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("message", "analysis_code", "response_code", "stock_name"),
+    [
+        ("AAPL", "AAPL", "AAPL", "苹果"),
+        ("hk00700", "HK00700", "00700", "腾讯控股"),
+    ],
+)
+def test_clawbot_message_auto_mode_routes_direct_ascii_ticker_to_analysis(
+    message: str,
+    analysis_code: str,
+    response_code: str,
+    stock_name: str,
+):
+    analysis_result = SimpleNamespace(
+        query_id="query_clawbot_direct_ascii",
+        stock_code=response_code,
+        stock_name=stock_name,
+        report={"summary": {}, "strategy": {}},
+    )
+
+    with patch(
+        "api.v1.endpoints.clawbot._handle_sync_analysis",
+        return_value=analysis_result,
+    ) as handle_analysis:
+        response = handle_clawbot_message(
+            ClawBotMessageRequest(message=message, mode="auto")
+        )
+
+    assert response.mode == "analysis"
+    assert response.query_id == "query_clawbot_direct_ascii"
+    assert response.stock_code == response_code
+    assert response.stock_name == stock_name
+    assert stock_name in response.text
+    handle_analysis.assert_called_once()
+    args, _ = handle_analysis.call_args
+    assert args[0] == analysis_code
 
 
 def test_clawbot_message_returns_consistent_error_when_agent_unavailable():

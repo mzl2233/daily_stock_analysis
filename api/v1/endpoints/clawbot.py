@@ -21,6 +21,10 @@ from src.config import get_config
 
 router = APIRouter()
 _CJK_RE = re.compile(r"[\u3400-\u9fff]")
+_DIRECT_STOCK_TOKEN_RE = re.compile(
+    r"^(?:\d{5,6}|(?:SH|SZ|SS)\d{6}|HK\d{1,5}|\d{6}\.(?:SH|SZ|SS)|\d{1,5}\.HK|[A-Za-z]{1,5}(?:\.[A-Za-z]{1,2})?)$",
+    re.IGNORECASE,
+)
 
 
 class ClawBotMessageRequest(BaseModel):
@@ -94,9 +98,31 @@ def _should_use_nl_stock_resolution(request: ClawBotMessageRequest) -> bool:
     return bool(_CJK_RE.search(request.message or ""))
 
 
+def _resolve_direct_auto_stock_code(message: str) -> Optional[str]:
+    stripped = (message or "").strip()
+    if not stripped or re.search(r"\s", stripped):
+        return None
+    if not _DIRECT_STOCK_TOKEN_RE.fullmatch(stripped):
+        return None
+
+    normalized = stripped.upper()
+    if normalized.isalpha() and "." not in normalized:
+        from src.data.stock_mapping import STOCK_NAME_MAP
+
+        if normalized not in STOCK_NAME_MAP:
+            return None
+
+    return _resolve_and_normalize_input(stripped)
+
+
 def _resolve_stock_from_request(request: ClawBotMessageRequest) -> Optional[str]:
     if request.stock_code:
         return _resolve_and_normalize_input(request.stock_code)
+
+    if request.mode == "auto":
+        direct_code = _resolve_direct_auto_stock_code(request.message)
+        if direct_code:
+            return direct_code
 
     if not _should_use_nl_stock_resolution(request):
         return None
