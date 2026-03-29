@@ -5,7 +5,7 @@ ClawBot plain-text bridge endpoint.
 
 from __future__ import annotations
 
-import logging
+import re
 import uuid
 from typing import Any, Dict, List, Literal, Optional
 
@@ -19,9 +19,8 @@ from api.v1.schemas.common import ErrorResponse
 from bot.dispatcher import CommandDispatcher
 from src.config import get_config
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter()
+_CJK_RE = re.compile(r"[\u3400-\u9fff]")
 
 
 class ClawBotMessageRequest(BaseModel):
@@ -89,6 +88,12 @@ def _build_agent_session_id(request: ClawBotMessageRequest) -> str:
     return str(uuid.uuid4())
 
 
+def _should_use_nl_stock_resolution(request: ClawBotMessageRequest) -> bool:
+    if request.mode != "auto":
+        return True
+    return bool(_CJK_RE.search(request.message or ""))
+
+
 def _resolve_stock_from_request(request: ClawBotMessageRequest) -> Optional[str]:
     if request.stock_code:
         return _resolve_and_normalize_input(request.stock_code)
@@ -98,6 +103,9 @@ def _resolve_stock_from_request(request: ClawBotMessageRequest) -> Optional[str]
     extracted_code = _extract_stock_code(request.message)
     if extracted_code:
         return _resolve_and_normalize_input(extracted_code)
+
+    if not _should_use_nl_stock_resolution(request):
+        return None
 
     resolved = CommandDispatcher._resolve_stock_code_from_text(request.message)
     if resolved:
@@ -178,17 +186,27 @@ def _run_agent(request: ClawBotMessageRequest) -> ClawBotMessageResponse:
         )
 
     skills = request.skills
-    executor = _build_executor(config, skills or None)
     session_id = _build_agent_session_id(request)
-    ctx = dict(request.context or {})
-    if skills is not None:
-        ctx["skills"] = skills
+    try:
+        executor = _build_executor(config, skills or None)
+        ctx = dict(request.context or {})
+        if skills is not None:
+            ctx["skills"] = skills
 
-    result = executor.chat(
-        message=request.message,
-        session_id=session_id,
-        context=ctx,
-    )
+        result = executor.chat(
+            message=request.message,
+            session_id=session_id,
+            context=ctx,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _raise_clawbot_error(
+            500,
+            "agent_failed",
+            str(exc) or "Agent 执行失败",
+            {"source": "agent", "session_id": session_id},
+        )
 
     if not result.success:
         _raise_clawbot_error(
@@ -211,6 +229,7 @@ def _run_agent(request: ClawBotMessageRequest) -> ClawBotMessageResponse:
     responses={
         200: {"description": "ClawBot 文本响应", "model": ClawBotMessageResponse},
         400: {"description": "请求参数错误或能力不可用", "model": ErrorResponse},
+        422: {"description": "请求体验证失败", "model": ErrorResponse},
         500: {"description": "分析或 Agent 执行失败", "model": ErrorResponse},
     },
     summary="ClawBot 文本桥接",
@@ -220,34 +239,49 @@ def handle_clawbot_message(request: ClawBotMessageRequest) -> ClawBotMessageResp
     """
     Bridge WeChat/openclaw ClawBot requests to existing analysis/agent capabilities.
     """
-    if not request.message.strip():
-        _raise_clawbot_error(
-            400,
-            "validation_error",
-            "message 不能为空或仅包含空白字符",
-            {"field": "message"},
-        )
-
-    if request.mode in {"auto", "analysis"}:
-        stock_code = _resolve_stock_from_request(request)
-        if stock_code:
-            return _run_analysis(request, stock_code)
-        if request.mode == "analysis":
+    try:
+        if not request.message.strip():
             _raise_clawbot_error(
                 400,
-                "unresolved_stock",
-                "未能从消息中识别股票代码或股票名称",
-                {"source": "analysis", "message": request.message},
+                "validation_error",
+                "message 不能为空或仅包含空白字符",
+                {"field": "message"},
             )
 
-    if request.mode == "auto":
-        config = get_config()
-        if not config.is_agent_available():
-            _raise_clawbot_error(
-                400,
-                "unsupported_request",
-                "未能从消息中识别股票代码或股票名称，且 Agent 模式未开启",
-                {"source": "clawbot", "mode": "auto"},
-            )
+        if request.mode in {"auto", "analysis"}:
+            stock_code = _resolve_stock_from_request(request)
+            if stock_code:
+                return _run_analysis(request, stock_code)
+            if request.mode == "analysis":
+                _raise_clawbot_error(
+                    400,
+                    "unresolved_stock",
+                    "未能从消息中识别股票代码或股票名称",
+                    {"source": "analysis", "message": request.message},
+                )
 
-    return _run_agent(request)
+        if request.mode == "auto":
+            config = get_config()
+            if not config.is_agent_available():
+                _raise_clawbot_error(
+                    400,
+                    "unsupported_request",
+                    "未能从消息中识别股票代码或股票名称，且 Agent 模式未开启",
+                    {"source": "clawbot", "mode": "auto"},
+                )
+
+        return _run_agent(request)
+    except HTTPException as exc:
+        detail = exc.detail
+        if isinstance(detail, dict) and "detail" not in detail:
+            normalized_detail = {
+                "error": detail.get("error") or "internal_error",
+                "message": detail.get("message") or "请求处理失败",
+                "detail": {
+                    **{k: v for k, v in detail.items() if k not in ("error", "message")},
+                    "source": detail.get("source") or "clawbot",
+                    "mode": request.mode,
+                },
+            }
+            raise HTTPException(status_code=exc.status_code, detail=normalized_detail) from exc
+        raise

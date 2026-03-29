@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the ClawBot bridge API."""
+import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -8,14 +10,49 @@ from tests.litellm_stub import ensure_litellm_stub
 ensure_litellm_stub()
 
 from fastapi import HTTPException
+from fastapi.exceptions import RequestValidationError
+from starlette.requests import Request
 
 from api.app import create_app
 from api.v1.endpoints.clawbot import ClawBotMessageRequest, handle_clawbot_message
 
 
+def _build_request() -> Request:
+    return Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/api/v1/clawbot/message",
+            "raw_path": b"/api/v1/clawbot/message",
+            "query_string": b"",
+            "headers": [],
+            "client": ("testclient", 50000),
+            "server": ("testserver", 80),
+        }
+    )
+
+
+def _render_http_exception(exc: HTTPException) -> dict:
+    app = create_app()
+    handler = app.exception_handlers[HTTPException]
+    response = asyncio.run(handler(_build_request(), exc))
+    return json.loads(response.body)
+
+
+def _render_validation_exception(exc: RequestValidationError) -> tuple[int, dict]:
+    app = create_app()
+    handler = app.exception_handlers[RequestValidationError]
+    response = asyncio.run(handler(_build_request(), exc))
+    return response.status_code, json.loads(response.body)
+
+
 def test_openapi_includes_clawbot_message_path():
     app = create_app()
-    assert "/api/v1/clawbot/message" in app.openapi()["paths"]
+    schema = app.openapi()
+    assert "/api/v1/clawbot/message" in schema["paths"]
+    assert "422" in schema["paths"]["/api/v1/clawbot/message"]["post"]["responses"]
 
 
 def test_clawbot_message_routes_to_analysis_and_formats_text():
@@ -94,6 +131,29 @@ def test_clawbot_message_routes_to_agent_with_stable_session_id():
     assert kwargs["context"]["skills"] == ["chan_theory"]
 
 
+def test_clawbot_message_auto_mode_falls_back_to_agent_for_plain_english_text():
+    executor = MagicMock()
+    executor.chat.return_value = SimpleNamespace(
+        success=True,
+        content="请提供想分析的股票代码或名称，我再继续。",
+        error=None,
+    )
+    config = SimpleNamespace(is_agent_available=lambda: True)
+
+    with patch("api.v1.endpoints.clawbot.get_config", return_value=config), \
+         patch("api.v1.endpoints.clawbot._build_executor", return_value=executor), \
+         patch("api.v1.endpoints.clawbot._handle_sync_analysis") as handle_analysis:
+        response = handle_clawbot_message(
+            ClawBotMessageRequest(message="I need advice", mode="auto", user_id="wx_user_002")
+        )
+
+    assert response.mode == "agent"
+    assert response.session_id == "clawbot_wx_user_002"
+    assert response.text == "请提供想分析的股票代码或名称，我再继续。"
+    handle_analysis.assert_not_called()
+    executor.chat.assert_called_once()
+
+
 def test_clawbot_message_returns_consistent_error_when_agent_unavailable():
     config = SimpleNamespace(is_agent_available=lambda: False)
 
@@ -113,3 +173,54 @@ def test_clawbot_message_returns_consistent_error_when_agent_unavailable():
                 }
 
     build_executor.assert_not_called()
+
+
+def test_clawbot_message_validation_handler_returns_error_response_shape():
+    status_code, body = _render_validation_exception(
+        RequestValidationError(
+            [{"loc": ("body", "message"), "msg": "Field required", "type": "missing"}]
+        )
+    )
+
+    assert status_code == 422
+    assert body["error"] == "validation_error"
+    assert body["message"] == "请求参数验证失败"
+    assert isinstance(body["detail"], list)
+
+
+def test_clawbot_message_http_handler_normalizes_analysis_validation_error():
+    try:
+        handle_clawbot_message(
+            ClawBotMessageRequest(message="??", mode="analysis", stock_code="??")
+        )
+        assert False, "Expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert _render_http_exception(exc) == {
+            "error": "validation_error",
+            "message": "请输入有效的股票代码或股票名称",
+            "detail": {"source": "clawbot", "mode": "analysis"},
+        }
+
+
+def test_clawbot_message_http_handler_wraps_executor_exception_as_agent_failed():
+    config = SimpleNamespace(is_agent_available=lambda: True)
+
+    with patch("api.v1.endpoints.clawbot.get_config", return_value=config), \
+         patch("api.v1.endpoints.clawbot._build_executor", side_effect=RuntimeError("executor boom")):
+        try:
+            handle_clawbot_message(
+                ClawBotMessageRequest(
+                    message="用缠论分析 600519",
+                    mode="agent",
+                    user_id="wx_user_003",
+                )
+            )
+            assert False, "Expected HTTPException"
+        except HTTPException as exc:
+            assert exc.status_code == 500
+            assert _render_http_exception(exc) == {
+                "error": "agent_failed",
+                "message": "executor boom",
+                "detail": {"source": "agent", "session_id": "clawbot_wx_user_003"},
+            }

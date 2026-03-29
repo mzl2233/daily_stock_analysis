@@ -96,7 +96,7 @@ ClawBot 适配层统一返回平铺结构，便于机器人侧直接判断：
 
 | 状态码 | error | 说明 |
 |--------|-------|------|
-| 400 | `validation_error` | 请求体缺字段或 `message` 为空 |
+| 422 / 400 | `validation_error` | 请求体缺字段时返回 422；`message` 为空或仅空白字符时返回 400 |
 | 400 | `unresolved_stock` | `analysis` 模式下未识别到股票代码/名称 |
 | 400 | `agent_unavailable` | `agent` 模式下 Agent 未开启或未配置可用模型 |
 | 400 | `unsupported_request` | `auto` 模式下既未识别股票，又无法回退 Agent |

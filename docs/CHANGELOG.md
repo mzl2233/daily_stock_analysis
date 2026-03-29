@@ -61,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### 测试
 
 - 🧪 **补充设置页版本信息回归测试** — 新增 Web 设置页版本信息渲染断言，并覆盖占位版本 `0.0.0` 自动回退为构建标识的逻辑。
+- 🧪 **UI 治理与关键路径回归补强** — 补充 `SidebarNav`、`ChatPage`、`BacktestPage` 等组件测试，并新增 UI governance 守卫，持续防止交互元素重新引入原生 `title` 属性或旧 `input-terminal` 样式回流。同步更新 smoke / markdown drawer 相关验证，覆盖主题升级后的关键主链路。
+
+- [修复] 🐳 **Docker WebUI 运行时优先复用预构建静态资源** — `prepare_webui_frontend_assets()` 现在会先检查镜像内已有的 `static/index.html` 是否可直接复用；当容器运行时不包含 `apps/dsa-web` 源码目录且未安装 `npm` 时，也不会误报“未找到前端项目，无法自动构建”，从而恢复 Docker 部署后的 WebUI 打开能力。
+- [改进] 🔎 **SerpAPI 正文补抓范围收敛** — 自然搜索结果不再逐条同步抓取网页正文；现在仅对极少数高位且摘要明显不足的结果，在更短超时预算内做延迟补抓，并优先复用 SerpAPI 已返回的结构化摘要，降低搜索链路尾延迟与慢站点放大风险。
+- [修复] A 股和中文股票名称场景下的相关资讯搜索恢复中文优先策略：`search_stock_news()` 现在会在首个 provider 主要返回英文资讯时继续尝试后续引擎，并将同批结果中的中文资讯排到前面；同时非美股查询不再默认沿用 Brave 的 `en/US` 区域语言偏好，避免更新后被英文新闻结果占满。
+- [feat] 🤖 **微信 / openclaw ClawBot 文本桥接 API** — 新增 `POST /api/v1/clawbot/message`，为 ClawBot 提供稳定的“文本消息 -> 股票分析或 Agent 问答 -> 简洁文本回复”适配层；默认不触发通知推送，错误响应统一为 `error/message/detail` 结构，便于外部机器人侧直接处理。
+- [docs] 🧾 **补齐 ClawBot 接入导航与专题说明** — 更新 `README.md`、`docs/README_EN.md` 与 `docs/openclaw-skill-integration.md`，将推荐接入路径统一到新的 ClawBot 适配端点，并补充模式说明、请求示例与边界说明。
+- [fix] 🐳 **Docker WebUI 运行时优先复用预构建静态资源** — `prepare_webui_frontend_assets()` 现在会先检查镜像内已有的 `static/index.html` 是否可直接复用；当容器运行时不包含 `apps/dsa-web` 源码目录且未安装 `npm` 时，也不会误报“未找到前端项目，无法自动构建”，从而恢复 Docker 部署后的 WebUI 打开能力。
 
 ## [3.11.0] - 2026-03-27
 
