@@ -790,8 +790,6 @@ class DatabaseManager:
             finally:
                 session.close()
 
-        raise RuntimeError(f"{operation_name} 重试失败")
-
     @staticmethod
     def _is_sqlite_locked_error(exc: OperationalError) -> bool:
         err_text = str(getattr(exc, "orig", exc)).lower()
@@ -1423,8 +1421,8 @@ class DatabaseManager:
         保存日线数据到数据库
         
         策略：
-        - 使用 UPSERT 逻辑（存在则更新，不存在则插入）
-        - 跳过已存在的数据，避免重复
+        - 按 `(code, date)` 做批量 UPSERT，已存在记录会覆盖更新
+        - 同一批次内若存在重复日期，以最后一条记录为准
         
         Args:
             df: 包含日线数据的 DataFrame
@@ -1432,7 +1430,7 @@ class DatabaseManager:
             data_source: 数据来源名称
             
         Returns:
-            新增/更新的记录数
+            本次实际新增的记录数
         """
         if df is None or df.empty:
             logger.warning(f"保存数据为空，跳过 {code}")

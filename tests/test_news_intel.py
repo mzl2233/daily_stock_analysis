@@ -162,7 +162,7 @@ class NewsIntelStorageTestCase(unittest.TestCase):
         self.assertEqual(len(recent_news), 1)
         self.assertEqual(recent_news[0].title, "茅台股价震荡")
 
-    def test_save_news_intel_retries_on_sqlite_locked_commit(self) -> None:
+    def test_save_news_intel_retries_on_sqlite_locked_execute(self) -> None:
         result = SearchResult(
             title="茅台锁竞争重试",
             snippet="模拟 SQLite locked...",
