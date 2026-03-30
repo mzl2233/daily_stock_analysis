@@ -217,6 +217,30 @@ class SystemConfigServiceTestCase(unittest.TestCase):
             )
         )
 
+    def test_validate_warns_when_only_folder_token_cleared_with_app_credentials(self) -> None:
+        """Clearing FEISHU_FOLDER_TOKEN while app credentials remain should trigger mismatch."""
+        old_version = self.manager.get_config_version()
+        self.service.update(
+            config_version=old_version,
+            items=[
+                {"key": "FEISHU_APP_ID", "value": "cli_xxx"},
+                {"key": "FEISHU_APP_SECRET", "value": "secret_xxx"},
+            ],
+        )
+        validation = self.service.validate(
+            items=[
+                {"key": "FEISHU_FOLDER_TOKEN", "value": ""},
+            ]
+        )
+        self.assertTrue(validation["valid"])
+        self.assertTrue(
+            any(
+                issue["code"] == "feishu_mode_mismatch"
+                and issue["severity"] == "warning"
+                for issue in validation["issues"]
+            )
+        )
+
     def test_update_persists_public_searxng_toggle(self) -> None:
         old_version = self.manager.get_config_version()
         response = self.service.update(

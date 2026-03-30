@@ -799,6 +799,7 @@ class SystemConfigService:
             "FEISHU_APP_SECRET",
             "FEISHU_WEBHOOK_URL",
             "FEISHU_STREAM_ENABLED",
+            "FEISHU_FOLDER_TOKEN",
         }
         has_feishu_app_id = bool((effective_map.get("FEISHU_APP_ID") or "").strip())
         has_feishu_app_secret = bool((effective_map.get("FEISHU_APP_SECRET") or "").strip())
