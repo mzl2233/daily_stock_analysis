@@ -144,6 +144,8 @@ def test_clawbot_message_auto_mode_falls_back_to_agent_for_plain_english_text():
 
     with patch("api.v1.endpoints.clawbot.get_config", return_value=config), \
          patch("api.v1.endpoints.clawbot._build_executor", return_value=executor), \
+         patch("src.agent.orchestrator._extract_stock_code", return_value=None), \
+         patch("api.v1.endpoints.clawbot.CommandDispatcher._resolve_stock_code_from_text", return_value=None), \
          patch("api.v1.endpoints.clawbot._handle_sync_analysis") as handle_analysis:
         response = handle_clawbot_message(
             ClawBotMessageRequest(message="I need advice", mode="auto", user_id="wx_user_002")
@@ -156,7 +158,7 @@ def test_clawbot_message_auto_mode_falls_back_to_agent_for_plain_english_text():
     executor.chat.assert_called_once()
 
 
-def test_clawbot_message_auto_mode_skips_ticker_extraction_for_uppercase_english_text():
+def test_clawbot_message_auto_mode_falls_back_to_agent_for_uppercase_english_text():
     executor = MagicMock()
     executor.chat.return_value = SimpleNamespace(
         success=True,
@@ -167,7 +169,8 @@ def test_clawbot_message_auto_mode_skips_ticker_extraction_for_uppercase_english
 
     with patch("api.v1.endpoints.clawbot.get_config", return_value=config), \
          patch("api.v1.endpoints.clawbot._build_executor", return_value=executor), \
-         patch("src.agent.orchestrator._extract_stock_code") as extract_stock_code, \
+         patch("src.agent.orchestrator._extract_stock_code", return_value=None), \
+         patch("api.v1.endpoints.clawbot.CommandDispatcher._resolve_stock_code_from_text", return_value=None), \
          patch("api.v1.endpoints.clawbot._handle_sync_analysis") as handle_analysis:
         response = handle_clawbot_message(
             ClawBotMessageRequest(message="I NEED ADVICE", mode="auto", user_id="wx_user_004")
@@ -176,7 +179,6 @@ def test_clawbot_message_auto_mode_skips_ticker_extraction_for_uppercase_english
     assert response.mode == "agent"
     assert response.session_id == "clawbot_wx_user_004"
     assert response.text == "请提供想分析的股票代码或名称，我再继续。"
-    extract_stock_code.assert_not_called()
     handle_analysis.assert_not_called()
     executor.chat.assert_called_once()
 
@@ -185,6 +187,8 @@ def test_clawbot_message_auto_mode_skips_ticker_extraction_for_uppercase_english
     ("message", "analysis_code", "response_code", "stock_name"),
     [
         ("AAPL", "AAPL", "AAPL", "苹果"),
+        ("NFLX", "NFLX", "NFLX", "Netflix"),
+        ("PLTR", "PLTR", "PLTR", "Palantir"),
         ("hk00700", "HK00700", "00700", "腾讯控股"),
     ],
 )
@@ -219,30 +223,44 @@ def test_clawbot_message_auto_mode_routes_direct_ascii_ticker_to_analysis(
     assert args[0] == analysis_code
 
 
-def test_clawbot_message_auto_mode_routes_english_request_with_ascii_ticker_to_analysis():
+@pytest.mark.parametrize(
+    ("message", "expected_code", "stock_name"),
+    [
+        ("analyze AAPL", "AAPL", "苹果"),
+        ("analyze NFLX", "NFLX", "Netflix"),
+    ],
+)
+def test_clawbot_message_auto_mode_routes_english_request_with_ascii_ticker_to_analysis(
+    message: str,
+    expected_code: str,
+    stock_name: str,
+):
     analysis_result = SimpleNamespace(
         query_id="query_clawbot_english_ascii",
-        stock_code="AAPL",
-        stock_name="苹果",
+        stock_code=expected_code,
+        stock_name=stock_name,
         report={"summary": {}, "strategy": {}},
     )
 
     with patch(
+        "src.agent.orchestrator._extract_stock_code",
+        return_value=expected_code,
+    ), patch(
         "api.v1.endpoints.clawbot._handle_sync_analysis",
         return_value=analysis_result,
     ) as handle_analysis:
         response = handle_clawbot_message(
-            ClawBotMessageRequest(message="analyze AAPL", mode="auto")
+            ClawBotMessageRequest(message=message, mode="auto")
         )
 
     assert response.mode == "analysis"
     assert response.query_id == "query_clawbot_english_ascii"
-    assert response.stock_code == "AAPL"
-    assert response.stock_name == "苹果"
-    assert "苹果" in response.text
+    assert response.stock_code == expected_code
+    assert response.stock_name == stock_name
+    assert stock_name in response.text
     handle_analysis.assert_called_once()
     args, _ = handle_analysis.call_args
-    assert args[0] == "AAPL"
+    assert args[0] == expected_code
 
 
 def test_clawbot_message_returns_consistent_error_when_agent_unavailable():

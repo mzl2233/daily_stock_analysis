@@ -98,16 +98,9 @@ def _should_use_nl_stock_resolution(request: ClawBotMessageRequest) -> bool:
     if _CJK_RE.search(request.message or ""):
         return True
 
-    from src.data.stock_mapping import STOCK_NAME_MAP
-
     for token in re.findall(r"[A-Za-z0-9.]+", request.message or ""):
-        if not _DIRECT_STOCK_TOKEN_RE.fullmatch(token):
-            continue
-
-        normalized = token.upper()
-        if normalized.isalpha() and "." not in normalized and normalized not in STOCK_NAME_MAP:
-            continue
-        return True
+        if _DIRECT_STOCK_TOKEN_RE.fullmatch(token):
+            return True
 
     return False
 
@@ -118,14 +111,6 @@ def _resolve_direct_auto_stock_code(message: str) -> Optional[str]:
         return None
     if not _DIRECT_STOCK_TOKEN_RE.fullmatch(stripped):
         return None
-
-    normalized = stripped.upper()
-    if normalized.isalpha() and "." not in normalized:
-        from src.data.stock_mapping import STOCK_NAME_MAP
-
-        if normalized not in STOCK_NAME_MAP:
-            return None
-
     return _resolve_and_normalize_input(stripped)
 
 
