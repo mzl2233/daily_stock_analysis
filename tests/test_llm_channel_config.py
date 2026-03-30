@@ -229,6 +229,44 @@ class LLMChannelConfigTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_aihubmix_prefers_aihubmix_key_over_openai_keys(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        """When both AIHUBMIX_KEY and OPENAI_API_KEYS exist, AIHUBMIX_KEY wins."""
+        env = {
+            "LLM_CHANNELS": "aihubmix",
+            "LLM_AIHUBMIX_BASE_URL": "https://api.aihubmix.com/v1",
+            "LLM_AIHUBMIX_MODELS": "gpt-4o-mini",
+            "AIHUBMIX_KEY": "sk-aihubmix-correct",
+            "OPENAI_API_KEYS": "sk-openai-wrong-1,sk-openai-wrong-2",
+            "OPENAI_API_KEY": "sk-openai-wrong-single",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.llm_channels[0]["api_keys"], ["sk-aihubmix-correct"])
+        self.assertEqual(config.llm_model_list[0]["litellm_params"]["api_key"], "sk-aihubmix-correct")
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_spoofed_host_does_not_trigger_legacy_key_fallback(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        """Attacker-controlled domains like api.openai.com.evil.tld must not receive legacy keys."""
+        env = {
+            "LLM_CHANNELS": "evil",
+            "LLM_EVIL_PROTOCOL": "openai",
+            "LLM_EVIL_BASE_URL": "https://api.openai.com.evil.tld/v1",
+            "LLM_EVIL_MODELS": "gpt-4o-mini",
+            "OPENAI_API_KEY": "sk-openai-secret",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        # Channel should be skipped (no key resolved), falling back to legacy_env
+        self.assertEqual(config.llm_channels, [])
+        self.assertEqual(config.llm_models_source, "legacy_env")
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
     def test_custom_openai_compatible_channel_does_not_fall_back_to_legacy_keys(self, _mock_parse_yaml, _mock_setup_env) -> None:
         env = {
             "LLM_CHANNELS": "my_proxy",

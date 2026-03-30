@@ -85,6 +85,11 @@ def read_env_key_list(multi_var: str, single_var: Optional[str] = None) -> Tuple
     return [], None
 
 
+def _is_provider_host(host: str, domain: str) -> bool:
+    """Strict host check: exact match or subdomain of *domain*."""
+    return host == domain or host.endswith('.' + domain)
+
+
 def resolve_channel_legacy_api_keys(channel_name: str, base_url: Optional[str]) -> Tuple[List[str], Optional[str]]:
     """Map well-known channel names/hosts to legacy provider secrets.
 
@@ -96,29 +101,26 @@ def resolve_channel_legacy_api_keys(channel_name: str, base_url: Optional[str]) 
     raw_name = (channel_name or "").strip().lower()
     host = (urlparse(base_url or "").hostname or "").lower()
 
-    if "aihubmix.com" in host or raw_name == "aihubmix":
-        openai_keys, openai_source = read_env_key_list('OPENAI_API_KEYS')
-        if openai_keys:
-            return openai_keys, openai_source
+    if _is_provider_host(host, "aihubmix.com") or raw_name == "aihubmix":
         aihubmix_key = os.getenv('AIHUBMIX_KEY', '').strip()
         if aihubmix_key:
             return [aihubmix_key], 'AIHUBMIX_KEY'
         return read_env_key_list('OPENAI_API_KEYS', 'OPENAI_API_KEY')
 
-    if "deepseek.com" in host or normalized_name == "deepseek":
+    if _is_provider_host(host, "deepseek.com") or normalized_name == "deepseek":
         return read_env_key_list('DEEPSEEK_API_KEYS', 'DEEPSEEK_API_KEY')
 
     if (
         normalized_name in {"gemini", "vertex_ai"}
-        or "generativelanguage.googleapis.com" in host
-        or "aiplatform.googleapis.com" in host
+        or _is_provider_host(host, "generativelanguage.googleapis.com")
+        or _is_provider_host(host, "aiplatform.googleapis.com")
     ):
         return read_env_key_list('GEMINI_API_KEYS', 'GEMINI_API_KEY')
 
-    if "anthropic.com" in host or normalized_name == "anthropic":
+    if _is_provider_host(host, "anthropic.com") or normalized_name == "anthropic":
         return read_env_key_list('ANTHROPIC_API_KEYS', 'ANTHROPIC_API_KEY')
 
-    if "openai.com" in host or normalized_name == "openai":
+    if _is_provider_host(host, "openai.com") or normalized_name == "openai":
         return read_env_key_list('OPENAI_API_KEYS', 'OPENAI_API_KEY')
 
     return [], None
