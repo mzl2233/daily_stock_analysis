@@ -100,27 +100,32 @@ def resolve_channel_legacy_api_keys(channel_name: str, base_url: Optional[str]) 
     normalized_name = canonicalize_llm_channel_protocol(channel_name)
     raw_name = (channel_name or "").strip().lower()
     host = (urlparse(base_url or "").hostname or "").lower()
+    # Name-based fallback is only safe when no custom base_url is configured,
+    # because requests will go to the provider's default endpoint.  When a
+    # base_url IS present, only trust the strict host check to prevent legacy
+    # secrets from leaking to attacker-controlled endpoints.
+    has_custom_url = bool(base_url and base_url.strip())
 
-    if _is_provider_host(host, "aihubmix.com") or raw_name == "aihubmix":
+    if _is_provider_host(host, "aihubmix.com") or (not has_custom_url and raw_name == "aihubmix"):
         aihubmix_key = os.getenv('AIHUBMIX_KEY', '').strip()
         if aihubmix_key:
             return [aihubmix_key], 'AIHUBMIX_KEY'
         return read_env_key_list('OPENAI_API_KEYS', 'OPENAI_API_KEY')
 
-    if _is_provider_host(host, "deepseek.com") or normalized_name == "deepseek":
+    if _is_provider_host(host, "deepseek.com") or (not has_custom_url and normalized_name == "deepseek"):
         return read_env_key_list('DEEPSEEK_API_KEYS', 'DEEPSEEK_API_KEY')
 
     if (
-        normalized_name in {"gemini", "vertex_ai"}
-        or _is_provider_host(host, "generativelanguage.googleapis.com")
+        _is_provider_host(host, "generativelanguage.googleapis.com")
         or _is_provider_host(host, "aiplatform.googleapis.com")
+        or (not has_custom_url and normalized_name in {"gemini", "vertex_ai"})
     ):
         return read_env_key_list('GEMINI_API_KEYS', 'GEMINI_API_KEY')
 
-    if _is_provider_host(host, "anthropic.com") or normalized_name == "anthropic":
+    if _is_provider_host(host, "anthropic.com") or (not has_custom_url and normalized_name == "anthropic"):
         return read_env_key_list('ANTHROPIC_API_KEYS', 'ANTHROPIC_API_KEY')
 
-    if _is_provider_host(host, "openai.com") or normalized_name == "openai":
+    if _is_provider_host(host, "openai.com") or (not has_custom_url and normalized_name == "openai"):
         return read_env_key_list('OPENAI_API_KEYS', 'OPENAI_API_KEY')
 
     return [], None

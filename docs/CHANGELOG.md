@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] 🔎 **SerpAPI 正文补抓范围收敛** — 自然搜索结果不再逐条同步抓取网页正文；现在仅对极少数高位且摘要明显不足的结果，在更短超时预算内做延迟补抓，并优先复用 SerpAPI 已返回的结构化摘要，降低搜索链路尾延迟与慢站点放大风险。
 - [修复] A 股和中文股票名称场景下的相关资讯搜索恢复中文优先策略：`search_stock_news()` 现在会在首个 provider 主要返回英文资讯时继续尝试后续引擎，并将同批结果中的中文资讯排到前面；同时非美股查询不再默认沿用 Brave 的 `en/US` 区域语言偏好，避免更新后被英文新闻结果占满。
 - [修复] `LLM_CHANNELS` 现在会在常见 provider 渠道缺少 `LLM_{NAME}_API_KEY(S)` 时，安全回退读取匹配的 legacy Secrets（如 `DEEPSEEK_API_KEY`、`AIHUBMIX_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`ANTHROPIC_API_KEY`），让 GitHub Actions 可继续使用默认 `.env` 的非敏感渠道结构。
+- [修复] `LLM_CHANNELS` 现在会在常见 provider 渠道缺少 `LLM_{NAME}_API_KEY(S)` 时，安全回退读取匹配的 legacy Secrets（如 `DEEPSEEK_API_KEY`、`AIHUBMIX_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`ANTHROPIC_API_KEY`），让 GitHub Actions 可继续使用默认 `.env` 的非敏感渠道结构。当渠道配置了自定义 `base_url` 时，仅通过严格域名校验匹配 legacy 密钥，防止凭据泄露到非官方端点。
 - [文档] 更新中英文 LLM 配置指南与 FAQ，补充 GitHub Actions 下渠道模式复用 legacy Secrets 的用法，并明确自定义渠道仍建议使用 `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`。
 
 ## [3.11.0] - 2026-03-27
