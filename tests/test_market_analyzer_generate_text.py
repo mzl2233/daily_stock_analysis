@@ -202,6 +202,48 @@ class TestAnalyzerGenerateText:
         assert "补全重试" in progress_updates[2][1]
         assert "解析 JSON" in progress_updates[3][1]
 
+    def test_parse_response_non_json_returns_failure(self):
+        """_parse_response must return success=False when LLM output is not valid JSON."""
+        analyzer = self._make_analyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
+
+        from src.analyzer import GeminiAnalyzer
+
+        result = GeminiAnalyzer._parse_response(analyzer, "这是一段纯文本分析，没有 JSON。", "600519", "贵州茅台")
+        assert result.success is False
+        assert result.error_message is not None
+        assert result.code == "600519"
+
+    def test_parse_response_malformed_json_returns_failure(self):
+        """_parse_response must return success=False when JSON extraction fails."""
+        analyzer = self._make_analyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
+
+        from src.analyzer import GeminiAnalyzer
+
+        malformed = "Here is the analysis: {broken json content without closing"
+        result = GeminiAnalyzer._parse_response(analyzer, malformed, "AAPL", "Apple")
+        assert result.success is False
+        assert result.error_message is not None
+
+    def test_parse_response_valid_json_returns_success(self):
+        """_parse_response must return success=True when LLM output contains valid JSON."""
+        analyzer = self._make_analyzer()
+        analyzer._config_override = SimpleNamespace(report_language="zh")
+
+        from src.analyzer import GeminiAnalyzer
+        import json
+
+        valid_response = json.dumps({
+            "sentiment_score": 75,
+            "trend_prediction": "看多",
+            "operation_advice": "持有",
+            "analysis_summary": "测试分析",
+        })
+        result = GeminiAnalyzer._parse_response(analyzer, valid_response, "600519", "贵州茅台")
+        assert result.success is True
+        assert result.error_message is None
+
 
 # ---------------------------------------------------------------------------
 # market_analyzer uses generate_text(), not private attributes

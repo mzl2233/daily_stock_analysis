@@ -2039,12 +2039,12 @@ class GeminiAnalyzer:
                     success=True,
                 )
             else:
-                # 没有找到 JSON，尝试从纯文本中提取信息
-                logger.warning(f"无法从响应中提取 JSON，使用原始文本分析")
+                # 没有找到 JSON，标记为失败
+                logger.warning(f"无法从响应中提取 JSON，标记为解析失败")
                 return self._parse_text_response(response_text, code, name)
                 
         except json.JSONDecodeError as e:
-            logger.warning(f"JSON 解析失败: {e}，尝试从文本提取")
+            logger.warning(f"JSON 解析失败: {e}，标记为解析失败")
             return self._parse_text_response(response_text, code, name)
     
     def _fix_json_string(self, json_str: str) -> str:
@@ -2119,7 +2119,8 @@ class GeminiAnalyzer:
             key_points='JSON parsing failed; treat this as best-effort output.' if report_language == "en" else 'JSON解析失败，仅供参考',
             risk_warning='The result may be inaccurate. Cross-check with other information.' if report_language == "en" else '分析结果可能不准确，建议结合其他信息判断',
             raw_response=response_text,
-            success=True,
+            success=False,
+            error_message='LLM response is not valid JSON; analysis result will not be persisted',
             report_language=report_language,
         )
     
