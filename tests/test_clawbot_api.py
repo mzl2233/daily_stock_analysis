@@ -263,6 +263,18 @@ def test_clawbot_message_auto_mode_routes_english_request_with_ascii_ticker_to_a
     assert args[0] == expected_code
 
 
+def test_clawbot_analysis_mode_rejects_plain_english_text():
+    """mode=analysis should return unresolved_stock for non-stock plain text."""
+    try:
+        handle_clawbot_message(
+            ClawBotMessageRequest(message="I need advice", mode="analysis")
+        )
+        assert False, "Expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail["error"] == "unresolved_stock"
+
+
 def test_clawbot_message_returns_consistent_error_when_agent_unavailable():
     config = SimpleNamespace(is_agent_available=lambda: False)
 

@@ -25,6 +25,12 @@ _DIRECT_STOCK_TOKEN_RE = re.compile(
     r"^(?:\d{5,6}|(?:SH|SZ|SS)\d{6}|HK\d{1,5}|\d{6}\.(?:SH|SZ|SS)|\d{1,5}\.HK|[A-Za-z]{1,5}(?:\.[A-Za-z]{1,2})?)$",
     re.IGNORECASE,
 )
+# Stricter gate for NL stock resolution: require uppercase 2+ chars for
+# alpha-only tokens so that common English words like "need" or "I" don't
+# trigger stock code extraction.
+_STOCK_HINT_TOKEN_RE = re.compile(
+    r"^(?:\d{5,6}|(?:SH|SZ|SS)\d{6}|HK\d{1,5}|\d{6}\.(?:SH|SZ|SS)|\d{1,5}\.HK|[A-Z]{2,5}(?:\.[A-Z]{1,2})?)$",
+)
 
 
 class ClawBotMessageRequest(BaseModel):
@@ -93,13 +99,12 @@ def _build_agent_session_id(request: ClawBotMessageRequest) -> str:
 
 
 def _should_use_nl_stock_resolution(request: ClawBotMessageRequest) -> bool:
-    if request.mode != "auto":
-        return True
-    if _CJK_RE.search(request.message or ""):
+    msg = request.message or ""
+    if _CJK_RE.search(msg):
         return True
 
-    for token in re.findall(r"[A-Za-z0-9.]+", request.message or ""):
-        if _DIRECT_STOCK_TOKEN_RE.fullmatch(token):
+    for token in re.findall(r"[A-Za-z0-9.]+", msg):
+        if _STOCK_HINT_TOKEN_RE.fullmatch(token):
             return True
 
     return False
