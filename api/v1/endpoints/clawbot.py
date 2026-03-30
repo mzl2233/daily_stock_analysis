@@ -25,12 +25,178 @@ _DIRECT_STOCK_TOKEN_RE = re.compile(
     r"^(?:\d{5,6}|(?:SH|SZ|SS)\d{6}|HK\d{1,5}|\d{6}\.(?:SH|SZ|SS)|\d{1,5}\.HK|[A-Za-z]{1,5}(?:\.[A-Za-z]{1,2})?)$",
     re.IGNORECASE,
 )
-# Stricter gate for NL stock resolution: require uppercase 2+ chars for
-# alpha-only tokens so that common English words like "need" or "I" don't
-# trigger stock code extraction.
+# Stricter gate for NL stock resolution: require 2+ chars for alpha-only
+# tokens so that single letters like "I" don't trigger stock code extraction.
+# Uses IGNORECASE so lowercase tickers like "aapl" in free text are accepted.
 _STOCK_HINT_TOKEN_RE = re.compile(
-    r"^(?:\d{5,6}|(?:SH|SZ|SS)\d{6}|HK\d{1,5}|\d{6}\.(?:SH|SZ|SS)|\d{1,5}\.HK|[A-Z]{2,5}(?:\.[A-Z]{1,2})?)$",
+    r"^(?:\d{5,6}|(?:SH|SZ|SS)\d{6}|HK\d{1,5}|\d{6}\.(?:SH|SZ|SS)|\d{1,5}\.HK|[A-Za-z]{2,5}(?:\.[A-Za-z]{1,2})?)$",
+    re.IGNORECASE,
 )
+# Frequent English words (1–5 letters) excluded from the direct single-token
+# auto-resolution fast path so that conversational messages like "hello" or
+# "need" are not misrouted to stock analysis.  The list intentionally trades
+# recall for precision—an unlisted word still falls through to the NL
+# heuristic path which handles it gracefully.
+_PLAIN_WORD_EXCLUSIONS: frozenset = frozenset({
+    # 1–2 letters
+    "a", "am", "an", "as", "at", "be", "by", "do", "go", "he", "hi",
+    "i", "if", "in", "is", "it", "me", "my", "no", "of", "oh", "ok",
+    "on", "or", "so", "to", "up", "us", "we",
+    # 3 letters
+    "add", "ago", "all", "and", "any", "are", "ask", "bad", "big",
+    "bit", "but", "buy", "can", "cut", "day", "did", "end", "eye",
+    "far", "few", "fit", "fix", "fly", "for", "fun", "get", "god",
+    "got", "guy", "had", "has", "her", "hey", "him", "his", "hit",
+    "hot", "how", "its", "job", "joy", "key", "kid", "law", "lay",
+    "led", "let", "lie", "lot", "low", "mad", "man", "map", "may",
+    "men", "met", "mix", "mom", "net", "new", "nor", "not", "now",
+    "odd", "off", "old", "one", "our", "out", "own", "pay", "per",
+    "put", "ran", "raw", "red", "rid", "run", "sad", "sat", "saw",
+    "say", "sea", "see", "set", "she", "sir", "sit", "six", "sky",
+    "son", "sub", "sum", "sun", "tag", "tax", "ten", "the", "tie",
+    "tip", "too", "top", "try", "two", "use", "van", "via", "war",
+    "was", "way", "web", "who", "why", "win", "won", "yes", "yet",
+    "you",
+    # 4 letters
+    "able", "also", "area", "away", "back", "base", "been", "best",
+    "body", "book", "both", "call", "came", "card", "care", "case",
+    "city", "code", "come", "cool", "copy", "cost", "data", "date",
+    "deal", "dear", "deep", "does", "done", "down", "draw", "drop",
+    "drug", "each", "earn", "ease", "east", "easy", "edit", "else",
+    "even", "ever", "face", "fact", "fail", "fair", "fall", "fast",
+    "fear", "feel", "file", "fill", "film", "find", "fine", "fire",
+    "flat", "food", "foot", "form", "free", "from", "fuel", "full",
+    "fund", "gain", "game", "gave", "girl", "give", "glad", "goes",
+    "gold", "gone", "good", "grew", "grow", "guys", "half", "hand",
+    "hang", "hard", "hate", "have", "head", "hear", "heat", "help",
+    "here", "hero", "hide", "high", "hill", "hold", "hole", "home",
+    "hope", "host", "hour", "huge", "hung", "hurt", "idea", "info",
+    "into", "item", "join", "jump", "just", "keen", "keep", "kept",
+    "kill", "kind", "king", "knew", "know", "lack", "lady", "laid",
+    "land", "last", "late", "lead", "left", "lend", "less", "life",
+    "lift", "like", "line", "link", "list", "live", "load", "lock",
+    "logo", "long", "look", "lord", "lose", "loss", "lost", "lots",
+    "love", "luck", "made", "mail", "main", "make", "male", "many",
+    "mark", "mass", "mean", "meet", "mind", "mine", "miss", "mode",
+    "mood", "more", "most", "move", "much", "must", "myth", "name",
+    "near", "neat", "need", "news", "next", "nice", "nine", "node",
+    "none", "norm", "nose", "note", "okay", "once", "only", "onto",
+    "open", "oral", "over", "pace", "pack", "page", "paid", "pair",
+    "park", "part", "pass", "past", "path", "peak", "pick", "plan",
+    "play", "plus", "poem", "poll", "pool", "poor", "post", "pour",
+    "pull", "pump", "pure", "push", "quit", "race", "rain", "rank",
+    "rare", "rate", "read", "real", "rely", "rent", "rest", "rich",
+    "ride", "ring", "rise", "risk", "road", "rock", "role", "roll",
+    "room", "root", "rose", "rule", "rush", "safe", "said", "sake",
+    "sale", "same", "sand", "sang", "save", "seal", "seat", "seed",
+    "seek", "seem", "seen", "self", "sell", "send", "sent", "ship",
+    "shop", "shot", "show", "shut", "sick", "side", "sign", "sing",
+    "site", "size", "skin", "slip", "slow", "snow", "soft", "soil",
+    "sold", "sole", "some", "song", "soon", "sort", "soul", "spin",
+    "spot", "star", "stay", "stem", "step", "stop", "such", "suit",
+    "sure", "swim", "tail", "take", "tale", "talk", "tall", "tank",
+    "tape", "task", "team", "tear", "tell", "tend", "term", "test",
+    "text", "than", "that", "them", "then", "they", "thin", "this",
+    "thus", "till", "time", "tiny", "tire", "told", "tone", "took",
+    "tool", "tops", "tore", "torn", "tour", "town", "trap", "tree",
+    "trim", "trip", "true", "tube", "tune", "turn", "twin", "type",
+    "ugly", "undo", "unit", "upon", "urge", "used", "user", "vary",
+    "vast", "very", "view", "vote", "wage", "wait", "wake", "walk",
+    "wall", "want", "warm", "warn", "wash", "wave", "weak", "wear",
+    "week", "well", "went", "were", "west", "what", "when", "whom",
+    "wide", "wife", "wild", "will", "wind", "wine", "wire", "wise",
+    "wish", "with", "wood", "word", "wore", "work", "worn", "wrap",
+    "yard", "yeah", "year", "your", "zero", "zone",
+    # 5 letters
+    "about", "above", "abuse", "added", "admit", "adopt", "adult",
+    "after", "again", "agent", "agree", "ahead", "alarm", "album",
+    "alert", "alive", "allow", "alone", "along", "alter", "among",
+    "anger", "angle", "angry", "apart", "apply", "arena", "argue",
+    "arise", "aside", "avoid", "awake", "award", "aware", "awful",
+    "badly", "basic", "begin", "being", "below", "birth", "black",
+    "blame", "blank", "blast", "bleed", "blend", "blind", "block",
+    "blood", "blown", "board", "bonus", "bound", "brain", "brand",
+    "brave", "bread", "break", "breed", "brief", "bring", "broad",
+    "broke", "brown", "brush", "buddy", "build", "built", "bunch",
+    "burst", "buyer", "carry", "catch", "cause", "chain", "chair",
+    "chaos", "cheap", "check", "cheek", "chest", "chief", "child",
+    "civil", "claim", "class", "clean", "clear", "climb", "clock",
+    "clone", "close", "cloth", "cloud", "coach", "coast", "could",
+    "count", "court", "cover", "crack", "craft", "crash", "crazy",
+    "cream", "crime", "cross", "crowd", "cruel", "crush", "cycle",
+    "daily", "dance", "death", "debug", "delay", "depth", "dirty",
+    "doing", "donor", "doubt", "draft", "drain", "drama", "drawn",
+    "dream", "dress", "drink", "drive", "drove", "dying", "eager",
+    "early", "earth", "eight", "email", "empty", "enemy", "enjoy",
+    "enter", "entry", "equal", "error", "essay", "event", "every",
+    "exact", "exist", "extra", "faith", "false", "fault", "feast",
+    "fewer", "fiber", "field", "fifty", "fight", "final", "first",
+    "fixed", "flame", "flash", "flesh", "float", "flood", "floor",
+    "fluid", "focus", "force", "forth", "found", "frame", "fraud",
+    "fresh", "front", "fruit", "fully", "funny", "giant", "given",
+    "glass", "globe", "going", "grace", "grade", "grain", "grand",
+    "grant", "grasp", "grass", "grave", "great", "green", "greet",
+    "gross", "group", "grown", "guard", "guess", "guest", "guide",
+    "guilt", "habit", "happy", "harsh", "haven", "heart", "heavy",
+    "hello", "hence", "honey", "honor", "horse", "hotel", "house",
+    "human", "humor", "hurry", "ideal", "image", "imply", "index",
+    "inner", "input", "issue", "joint", "judge", "juice", "known",
+    "label", "labor", "large", "laser", "later", "laugh", "layer",
+    "learn", "lease", "least", "leave", "legal", "level", "light",
+    "limit", "lived", "lobby", "local", "logic", "loose", "lover",
+    "lower", "loyal", "lucky", "lunch", "magic", "major", "maker",
+    "match", "maybe", "mayor", "meant", "media", "mercy", "merit",
+    "metal", "might", "minor", "mixed", "model", "money", "month",
+    "moral", "mount", "mouse", "mouth", "moved", "movie", "music",
+    "named", "naval", "nerve", "never", "newly", "night", "noble",
+    "noise", "north", "noted", "novel", "nurse", "occur", "ocean",
+    "offer", "often", "onset", "order", "other", "ought", "outer",
+    "owned", "owner", "paint", "panel", "panic", "paper", "party",
+    "paste", "patch", "pause", "peace", "penny", "phase", "phone",
+    "photo", "piece", "pilot", "pitch", "place", "plain", "plane",
+    "plant", "plate", "plaza", "plead", "point", "pound", "power",
+    "press", "price", "pride", "prime", "print", "prior", "prize",
+    "proof", "proud", "prove", "proxy", "pulse", "punch", "pupil",
+    "queen", "query", "quest", "queue", "quick", "quiet", "quite",
+    "quota", "quote", "radar", "radio", "raise", "rally", "range",
+    "rapid", "ratio", "reach", "react", "ready", "realm", "rebel",
+    "refer", "reign", "relax", "relay", "reply", "rider", "right",
+    "rigid", "rival", "river", "robot", "rocky", "rough", "round",
+    "route", "royal", "rumor", "rural", "sadly", "salad", "sauce",
+    "scale", "scare", "scary", "scene", "scope", "score", "sense",
+    "serve", "setup", "seven", "shade", "shake", "shall", "shame",
+    "shape", "share", "sharp", "shave", "sheet", "shelf", "shell",
+    "shift", "shine", "shirt", "shock", "shoot", "shore", "short",
+    "shout", "shown", "sight", "silly", "since", "sixth", "sixty",
+    "sized", "skill", "skull", "slate", "slave", "sleep", "slice",
+    "slide", "slope", "smart", "smell", "smile", "smoke", "snake",
+    "solar", "solid", "solve", "sorry", "sound", "south", "space",
+    "spare", "spark", "speak", "speed", "spell", "spend", "spine",
+    "spite", "split", "spoke", "sport", "spray", "squad", "stack",
+    "staff", "stage", "stain", "stair", "stake", "stale", "stall",
+    "stamp", "stand", "stare", "start", "state", "stays", "steam",
+    "steel", "steep", "steer", "stick", "stiff", "still", "stock",
+    "stole", "stone", "stood", "store", "storm", "story", "stove",
+    "strip", "stuck", "study", "stuff", "style", "sugar", "suite",
+    "sunny", "super", "surge", "swamp", "swear", "sweat", "sweep",
+    "sweet", "swept", "swift", "swing", "sword", "swore", "sworn",
+    "table", "taken", "taste", "teach", "teeth", "thank", "their",
+    "theme", "there", "these", "thick", "thief", "thing", "think",
+    "third", "those", "three", "threw", "throw", "thumb", "tight",
+    "tired", "title", "toast", "today", "token", "topic", "total",
+    "touch", "tough", "tower", "toxic", "trace", "track", "trade",
+    "trail", "train", "trait", "trash", "treat", "trend", "trial",
+    "tribe", "trick", "tried", "troop", "truck", "truly", "trunk",
+    "trust", "truth", "tumor", "twice", "twist", "ultra", "under",
+    "union", "unite", "unity", "until", "upper", "upset", "urban",
+    "usage", "usual", "using", "utter", "valid", "value", "venue",
+    "video", "vigor", "virus", "visit", "vital", "vivid", "vocal",
+    "voice", "voter", "waste", "watch", "water", "weave", "weigh",
+    "weird", "whale", "wheat", "wheel", "where", "which", "while",
+    "white", "whole", "whose", "wider", "woman", "women", "world",
+    "worry", "worse", "worst", "worth", "would", "wound", "write",
+    "wrong", "wrote", "yield", "young", "yours", "youth",
+})
 
 
 class ClawBotMessageRequest(BaseModel):
@@ -104,6 +270,8 @@ def _should_use_nl_stock_resolution(request: ClawBotMessageRequest) -> bool:
         return True
 
     for token in re.findall(r"[A-Za-z0-9.]+", msg):
+        if token.lower() in _PLAIN_WORD_EXCLUSIONS:
+            continue
         if _STOCK_HINT_TOKEN_RE.fullmatch(token):
             return True
 
@@ -115,6 +283,9 @@ def _resolve_direct_auto_stock_code(message: str) -> Optional[str]:
     if not stripped or re.search(r"\s", stripped):
         return None
     if not _DIRECT_STOCK_TOKEN_RE.fullmatch(stripped):
+        return None
+    # Reject common English words so "hello" / "need" are not misrouted.
+    if stripped.lower() in _PLAIN_WORD_EXCLUSIONS:
         return None
     return _resolve_and_normalize_input(stripped)
 

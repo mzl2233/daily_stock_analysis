@@ -345,3 +345,60 @@ def test_clawbot_message_http_handler_wraps_executor_exception_as_agent_failed()
                 "message": "executor boom",
                 "detail": {"source": "agent", "session_id": "clawbot_wx_user_003"},
             }
+
+
+@pytest.mark.parametrize("word", ["hello", "HELLO", "Hello", "need", "NEED", "sorry", "ABOUT", "maybe"])
+def test_clawbot_auto_mode_rejects_plain_english_word_as_direct_ticker(word: str):
+    """Plain English words must not be treated as stock tickers (P1 fix)."""
+    executor = MagicMock()
+    executor.chat.return_value = SimpleNamespace(
+        success=True, content="Fallback.", error=None,
+    )
+    config = SimpleNamespace(is_agent_available=lambda: True)
+
+    with patch("api.v1.endpoints.clawbot.get_config", return_value=config), \
+         patch("api.v1.endpoints.clawbot._build_executor", return_value=executor), \
+         patch("src.agent.orchestrator._extract_stock_code", return_value=None), \
+         patch("api.v1.endpoints.clawbot.CommandDispatcher._resolve_stock_code_from_text", return_value=None), \
+         patch("api.v1.endpoints.clawbot._handle_sync_analysis") as handle_analysis:
+        response = handle_clawbot_message(
+            ClawBotMessageRequest(message=word, mode="auto")
+        )
+
+    assert response.mode == "agent", f"'{word}' should NOT be routed to analysis"
+    handle_analysis.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_code"),
+    [
+        ("analyze aapl", "AAPL"),
+        ("analyze nflx", "NFLX"),
+    ],
+)
+def test_clawbot_auto_mode_resolves_lowercase_ticker_in_free_text(
+    message: str,
+    expected_code: str,
+):
+    """Lowercase tickers in NL text should be accepted by the stock-hint gate (P2 fix)."""
+    analysis_result = SimpleNamespace(
+        query_id="query_clawbot_lower",
+        stock_code=expected_code,
+        stock_name=expected_code,
+        report={"summary": {}, "strategy": {}},
+    )
+
+    with patch(
+        "src.agent.orchestrator._extract_stock_code",
+        return_value=expected_code,
+    ), patch(
+        "api.v1.endpoints.clawbot._handle_sync_analysis",
+        return_value=analysis_result,
+    ) as handle_analysis:
+        response = handle_clawbot_message(
+            ClawBotMessageRequest(message=message, mode="auto")
+        )
+
+    assert response.mode == "analysis"
+    assert response.stock_code == expected_code
+    handle_analysis.assert_called_once()
