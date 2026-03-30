@@ -284,6 +284,23 @@ class LLMChannelConfigTestCase(unittest.TestCase):
 
     @patch("src.config.setup_env")
     @patch.object(Config, "_parse_litellm_yaml", return_value=[])
+    def test_http_base_url_blocks_legacy_key_fallback(self, _mock_parse_yaml, _mock_setup_env) -> None:
+        """Plaintext HTTP base URLs must not trigger host-based legacy key fallback."""
+        env = {
+            "LLM_CHANNELS": "openai",
+            "LLM_OPENAI_BASE_URL": "http://api.openai.com/v1",
+            "LLM_OPENAI_MODELS": "gpt-4o-mini",
+            "OPENAI_API_KEY": "sk-openai-secret",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            config = Config._load_from_env()
+
+        self.assertEqual(config.llm_channels, [])
+        self.assertEqual(config.llm_models_source, "legacy_env")
+
+    @patch("src.config.setup_env")
+    @patch.object(Config, "_parse_litellm_yaml", return_value=[])
     def test_custom_openai_compatible_channel_does_not_fall_back_to_legacy_keys(self, _mock_parse_yaml, _mock_setup_env) -> None:
         env = {
             "LLM_CHANNELS": "my_proxy",
