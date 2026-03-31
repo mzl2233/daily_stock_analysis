@@ -25,11 +25,12 @@ _DIRECT_STOCK_TOKEN_RE = re.compile(
     r"^(?:\d{5,6}|(?:SH|SZ|SS)\d{6}|HK\d{1,5}|\d{6}\.(?:SH|SZ|SS)|\d{1,5}\.HK|[A-Za-z]{1,5}(?:\.[A-Za-z]{1,2})?)$",
     re.IGNORECASE,
 )
-# Stricter gate for NL stock resolution: require 2+ chars for alpha-only
-# tokens so that single letters like "I" don't trigger stock code extraction.
+# Stricter gate for NL stock resolution.  Single-letter pronouns "I" / "A"
+# are covered by the exclusion list; allowing 1-letter alpha tokens here
+# restores support for legitimate single-letter US tickers such as F and T.
 # Uses IGNORECASE so lowercase tickers like "aapl" in free text are accepted.
 _STOCK_HINT_TOKEN_RE = re.compile(
-    r"^(?:\d{5,6}|(?:SH|SZ|SS)\d{6}|HK\d{1,5}|\d{6}\.(?:SH|SZ|SS)|\d{1,5}\.HK|[A-Za-z]{2,5}(?:\.[A-Za-z]{1,2})?)$",
+    r"^(?:\d{5,6}|(?:SH|SZ|SS)\d{6}|HK\d{1,5}|\d{6}\.(?:SH|SZ|SS)|\d{1,5}\.HK|[A-Za-z]{1,5}(?:\.[A-Za-z]{1,2})?)$",
     re.IGNORECASE,
 )
 # Frequent English words (1–5 letters) excluded from the direct single-token
@@ -269,9 +270,19 @@ def _should_use_nl_stock_resolution(request: ClawBotMessageRequest) -> bool:
     if _CJK_RE.search(msg):
         return True
 
-    for token in re.findall(r"[A-Za-z0-9.]+", msg):
-        if token.lower() in _PLAIN_WORD_EXCLUSIONS:
-            continue
+    tokens = re.findall(r"[A-Za-z0-9.]+", msg)
+    multi_word = len(tokens) > 1
+
+    for token in tokens:
+        low = token.lower()
+        # In multi-word messages, let uppercase tokens (≥2 letters) bypass the
+        # common-word exclusion so legitimate tickers like SHOP in
+        # "analyze SHOP" reach the downstream resolver.  Single-word messages
+        # keep the full exclusion to prevent bare conversational words from
+        # being misrouted.
+        if low in _PLAIN_WORD_EXCLUSIONS:
+            if not (multi_word and token.isupper() and len(token) >= 2):
+                continue
         if _STOCK_HINT_TOKEN_RE.fullmatch(token):
             return True
 
@@ -298,6 +309,15 @@ def _resolve_stock_from_request(request: ClawBotMessageRequest) -> Optional[str]
         direct_code = _resolve_direct_auto_stock_code(request.message)
         if direct_code:
             return direct_code
+
+    # In analysis mode, try direct single-token resolution without the
+    # common-word exclusion list.  The user explicitly requested analysis,
+    # so word-like tickers (e.g. SHOP) should be resolved, not rejected.
+    if request.mode == "analysis":
+        stripped = (request.message or "").strip()
+        if stripped and not re.search(r"\s", stripped):
+            if _DIRECT_STOCK_TOKEN_RE.fullmatch(stripped):
+                return _resolve_and_normalize_input(stripped)
 
     if not _should_use_nl_stock_resolution(request):
         return None

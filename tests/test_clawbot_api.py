@@ -369,6 +369,91 @@ def test_clawbot_auto_mode_rejects_plain_english_word_as_direct_ticker(word: str
     handle_analysis.assert_not_called()
 
 
+def test_clawbot_analysis_mode_resolves_word_like_ticker():
+    """mode=analysis should resolve word-like tickers (e.g. SHOP) that are
+    also common English words, bypassing the exclusion list (P1 fix)."""
+    analysis_result = SimpleNamespace(
+        query_id="query_clawbot_word_ticker",
+        stock_code="SHOP",
+        stock_name="Shopify",
+        report={"summary": {}, "strategy": {}},
+    )
+
+    with patch(
+        "api.v1.endpoints.clawbot._handle_sync_analysis",
+        return_value=analysis_result,
+    ) as handle_analysis:
+        response = handle_clawbot_message(
+            ClawBotMessageRequest(message="SHOP", mode="analysis")
+        )
+
+    assert response.success is True
+    assert response.mode == "analysis"
+    assert response.stock_code == "SHOP"
+    handle_analysis.assert_called_once()
+
+
+def test_clawbot_auto_mode_routes_analyze_word_like_ticker_to_analysis():
+    """In auto mode, 'analyze SHOP' should route to analysis, not Agent (P1 fix)."""
+    analysis_result = SimpleNamespace(
+        query_id="query_clawbot_analyze_shop",
+        stock_code="SHOP",
+        stock_name="Shopify",
+        report={"summary": {}, "strategy": {}},
+    )
+
+    with patch(
+        "src.agent.orchestrator._extract_stock_code",
+        return_value="SHOP",
+    ), patch(
+        "api.v1.endpoints.clawbot._handle_sync_analysis",
+        return_value=analysis_result,
+    ) as handle_analysis:
+        response = handle_clawbot_message(
+            ClawBotMessageRequest(message="analyze SHOP", mode="auto")
+        )
+
+    assert response.mode == "analysis"
+    assert response.stock_code == "SHOP"
+    handle_analysis.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_code"),
+    [
+        ("analyze F", "F"),
+        ("analyze T", "T"),
+    ],
+)
+def test_clawbot_auto_mode_routes_single_letter_ticker_in_text(
+    message: str,
+    expected_code: str,
+):
+    """Single-letter tickers embedded in NL text should pass the stock-hint
+    gate in auto mode (P2 fix)."""
+    analysis_result = SimpleNamespace(
+        query_id="query_clawbot_single_letter",
+        stock_code=expected_code,
+        stock_name=expected_code,
+        report={"summary": {}, "strategy": {}},
+    )
+
+    with patch(
+        "src.agent.orchestrator._extract_stock_code",
+        return_value=expected_code,
+    ), patch(
+        "api.v1.endpoints.clawbot._handle_sync_analysis",
+        return_value=analysis_result,
+    ) as handle_analysis:
+        response = handle_clawbot_message(
+            ClawBotMessageRequest(message=message, mode="auto")
+        )
+
+    assert response.mode == "analysis"
+    assert response.stock_code == expected_code
+    handle_analysis.assert_called_once()
+
+
 @pytest.mark.parametrize(
     ("message", "expected_code"),
     [
