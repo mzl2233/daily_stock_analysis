@@ -1466,17 +1466,6 @@ class DatabaseManager:
         batch_dates = list(records_by_date.keys())
 
         def _write(session: Session) -> int:
-            existing_dates = set(
-                session.execute(
-                    select(StockDaily.date).where(
-                        and_(
-                            StockDaily.code == code,
-                            StockDaily.date.in_(batch_dates),
-                        )
-                    )
-                ).scalars().all()
-            )
-
             if self._is_sqlite_engine:
                 stmt = sqlite_insert(StockDaily).values(records)
                 excluded = stmt.excluded
@@ -1531,7 +1520,20 @@ class DatabaseManager:
                     existing.data_source = record['data_source']
                     existing.updated_at = record['updated_at']
 
-            return len(batch_dates) - len(existing_dates)
+            # Derive actual insert count from upsert result: created_at is
+            # NOT in the ON CONFLICT SET clause, so only genuinely new rows
+            # carry the current `now` timestamp.
+            session.flush()
+            new_count = session.execute(
+                select(func.count()).select_from(StockDaily).where(
+                    and_(
+                        StockDaily.code == code,
+                        StockDaily.date.in_(batch_dates),
+                        StockDaily.created_at == now,
+                    )
+                )
+            ).scalar()
+            return new_count or 0
 
         try:
             saved_count = self._run_write_transaction(
