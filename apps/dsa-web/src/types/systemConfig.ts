@@ -151,6 +151,7 @@ export interface DiscoverLLMChannelModelsRequest {
   protocol: string;
   baseUrl?: string;
   apiKey?: string;
+  models?: string[];
   timeoutSeconds?: number;
 }
 

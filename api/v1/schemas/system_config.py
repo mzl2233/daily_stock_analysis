@@ -169,6 +169,7 @@ class DiscoverLLMChannelModelsRequest(BaseModel):
     protocol: str = "openai"
     base_url: str = ""
     api_key: str = ""
+    models: List[str] = Field(default_factory=list)
     timeout_seconds: float = 20.0
 
 

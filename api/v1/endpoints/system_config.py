@@ -336,6 +336,7 @@ def discover_llm_channel_models(
             protocol=request.protocol,
             base_url=request.base_url,
             api_key=request.api_key,
+            models=request.models,
             timeout_seconds=request.timeout_seconds,
         )
         return DiscoverLLMChannelModelsResponse.model_validate(payload)
