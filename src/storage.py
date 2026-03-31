@@ -1423,6 +1423,7 @@ class DatabaseManager:
         策略：
         - 按 `(code, date)` 做批量 UPSERT，已存在记录会覆盖更新
         - 同一批次内若存在重复日期，以最后一条记录为准
+        - SQLite 分支按 chunk 写入以避免绑定参数上限
         
         Args:
             df: 包含日线数据的 DataFrame
@@ -1430,7 +1431,7 @@ class DatabaseManager:
             data_source: 数据来源名称
             
         Returns:
-            本次实际新增的记录数
+            本次实际新增的记录数（不含更新）
         """
         if df is None or df.empty:
             logger.warning(f"保存数据为空，跳过 {code}")
@@ -1467,28 +1468,33 @@ class DatabaseManager:
 
         def _write(session: Session) -> int:
             if self._is_sqlite_engine:
-                stmt = sqlite_insert(StockDaily).values(records)
-                excluded = stmt.excluded
-                session.execute(
-                    stmt.on_conflict_do_update(
-                        index_elements=['code', 'date'],
-                        set_={
-                            'open': excluded.open,
-                            'high': excluded.high,
-                            'low': excluded.low,
-                            'close': excluded.close,
-                            'volume': excluded.volume,
-                            'amount': excluded.amount,
-                            'pct_chg': excluded.pct_chg,
-                            'ma5': excluded.ma5,
-                            'ma10': excluded.ma10,
-                            'ma20': excluded.ma20,
-                            'volume_ratio': excluded.volume_ratio,
-                            'data_source': excluded.data_source,
-                            'updated_at': excluded.updated_at,
-                        },
+                # SQLite has a per-statement bind-parameter limit (commonly 999).
+                # Each record has ~15 columns, so chunk to stay well within bounds.
+                _SQLITE_CHUNK = 50
+                for i in range(0, len(records), _SQLITE_CHUNK):
+                    chunk = records[i : i + _SQLITE_CHUNK]
+                    stmt = sqlite_insert(StockDaily).values(chunk)
+                    excluded = stmt.excluded
+                    session.execute(
+                        stmt.on_conflict_do_update(
+                            index_elements=['code', 'date'],
+                            set_={
+                                'open': excluded.open,
+                                'high': excluded.high,
+                                'low': excluded.low,
+                                'close': excluded.close,
+                                'volume': excluded.volume,
+                                'amount': excluded.amount,
+                                'pct_chg': excluded.pct_chg,
+                                'ma5': excluded.ma5,
+                                'ma10': excluded.ma10,
+                                'ma20': excluded.ma20,
+                                'volume_ratio': excluded.volume_ratio,
+                                'data_source': excluded.data_source,
+                                'updated_at': excluded.updated_at,
+                            },
+                        )
                     )
-                )
             else:
                 existing_rows = {
                     row.date: row
