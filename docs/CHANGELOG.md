@@ -58,7 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] 🔎 **SerpAPI 正文补抓范围收敛** — 自然搜索结果不再逐条同步抓取网页正文；现在仅对极少数高位且摘要明显不足的结果，在更短超时预算内做延迟补抓，并优先复用 SerpAPI 已返回的结构化摘要，降低搜索链路尾延迟与慢站点放大风险。
 - [修复] A 股和中文股票名称场景下的相关资讯搜索恢复中文优先策略：`search_stock_news()` 现在会在首个 provider 主要返回英文资讯时继续尝试后续引擎，并将同批结果中的中文资讯排到前面；同时非美股查询不再默认沿用 Brave 的 `en/US` 区域语言偏好，避免更新后被英文新闻结果占满。
 - [修复] 飞书自定义机器人启用签名校验时，`FeishuSender` 现在会为每次 webhook 请求补充 `timestamp` 和 `sign`，恢复卡片发送、超长分批发送与文本 fallback 的可用性。
-- [修复] 飞书自定义机器人启用签名校验时，`FeishuSender` 现在会优先使用独立的 `FEISHU_WEBHOOK_SIGNING_SECRET` 补充 `timestamp` 和 `sign`，并保留 `FEISHU_APP_SECRET` 在飞书应用场景的语义；若未配置独立签名密钥会回退使用应用 Secret 兼容旧配置。
 - [修复] 飞书自定义机器人启用签名校验时，`FeishuSender` 会使用独立的 `FEISHU_WEBHOOK_SIGNING_SECRET` 补充 `timestamp` 和 `sign`；未配置该密钥时保持不签名，避免影响 `FEISHU_APP_SECRET` 场景。
 
 ## [3.11.0] - 2026-03-27
