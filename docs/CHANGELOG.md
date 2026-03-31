@@ -11,15 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
-### 新功能
-
-- 🤖 **微信 / openclaw ClawBot 文本桥接 API** — 新增 `POST /api/v1/clawbot/message`，为 ClawBot 提供稳定的“文本消息 -> 股票分析或 Agent 问答 -> 简洁文本回复”适配层；默认不触发通知推送，错误响应统一为 `error/message/detail` 结构，便于外部机器人侧直接处理。
-
-### 文档
-
-- 🧾 **补齐 ClawBot 接入导航与专题说明** — 更新 `README.md`、`docs/README_EN.md` 与 `docs/openclaw-skill-integration.md`，将推荐接入路径统一到新的 ClawBot 适配端点，并补充模式说明、请求示例与边界说明。
-
-### 修复
 
 ## [3.12.0] - 2026-04-01
 
@@ -69,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [feat] 🤖 **微信 / openclaw ClawBot 文本桥接 API** — 新增 `POST /api/v1/clawbot/message`，为 ClawBot 提供稳定的“文本消息 -> 股票分析或 Agent 问答 -> 简洁文本回复”适配层；默认不触发通知推送，错误响应统一为 `error/message/detail` 结构，便于外部机器人侧直接处理。
 - [docs] 🧾 **补齐 ClawBot 接入导航与专题说明** — 更新 `README.md`、`docs/README_EN.md` 与 `docs/openclaw-skill-integration.md`，将推荐接入路径统一到新的 ClawBot 适配端点，并补充模式说明、请求示例与边界说明。
 - [fix] 🐳 **Docker WebUI 运行时优先复用预构建静态资源** — `prepare_webui_frontend_assets()` 现在会先检查镜像内已有的 `static/index.html` 是否可直接复用；当容器运行时不包含 `apps/dsa-web` 源码目录且未安装 `npm` 时，也不会误报“未找到前端项目，无法自动构建”，从而恢复 Docker 部署后的 WebUI 打开能力。
+- [新功能] 🤖 **微信 / openclaw ClawBot 文本桥接 API** — 新增 `POST /api/v1/clawbot/message`，为 ClawBot 提供稳定的“文本消息 -> 股票分析或 Agent 问答 -> 简洁文本回复”适配层；默认不触发通知推送，错误响应统一为 `error/message/detail` 结构，便于外部机器人侧直接处理。
+- [文档] 🧾 **补齐 ClawBot 接入导航与专题说明** — 更新 `README.md`、`docs/README_EN.md` 与 `docs/openclaw-skill-integration.md`，将推荐接入路径统一到新的 ClawBot 适配端点，并补充模式说明、请求示例与边界说明。
 
 ## [3.11.0] - 2026-03-27
 
