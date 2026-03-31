@@ -60,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] `LLM_CHANNELS` 现在会在常见 provider 渠道缺少 `LLM_{NAME}_API_KEY(S)` 时，安全回退读取匹配的 legacy Secrets（如 `DEEPSEEK_API_KEY`、`AIHUBMIX_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`ANTHROPIC_API_KEY`），让 GitHub Actions 可继续使用默认 `.env` 的非敏感渠道结构。
 - [修复] `LLM_CHANNELS` 现在会在常见 provider 渠道缺少 `LLM_{NAME}_API_KEY(S)` 时，安全回退读取匹配的 legacy Secrets（如 `DEEPSEEK_API_KEY`、`AIHUBMIX_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`ANTHROPIC_API_KEY`），让 GitHub Actions 可继续使用默认 `.env` 的非敏感渠道结构。当渠道配置了自定义 `base_url` 时，仅通过严格域名校验匹配 legacy 密钥，防止凭据泄露到非官方端点。
 - [修复] `LLM_CHANNELS` 现在会在常见 provider 渠道缺少 `LLM_{NAME}_API_KEY(S)` 时，安全回退读取匹配的 legacy Secrets（如 `DEEPSEEK_API_KEY`、`AIHUBMIX_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`ANTHROPIC_API_KEY`），让 GitHub Actions 可继续使用默认 `.env` 的非敏感渠道结构。当渠道配置了自定义 `base_url` 时，仅当 URL 使用 HTTPS 协议且通过严格域名校验时才匹配 legacy 密钥，防止凭据通过明文 HTTP 或非官方端点泄露。
+- [修复] `LLM_CHANNELS` 现在会在常见 provider 渠道缺少 `LLM_{NAME}_API_KEY(S)` 时，安全回退读取匹配的 legacy Secrets（如 `DEEPSEEK_API_KEY`、`AIHUBMIX_KEY`、`OPENAI_API_KEY`、`GEMINI_API_KEY`、`ANTHROPIC_API_KEY`），让 GitHub Actions 可继续使用默认 `.env` 的非敏感渠道结构。当渠道配置了自定义 `base_url` 时，仅当 URL 使用 HTTPS 协议且通过严格域名校验时才匹配 legacy 密钥，防止凭据通过明文 HTTP 或非官方端点泄露；当渠道显式设置了 `LLM_{NAME}_PROTOCOL` 时，按最终协议而非渠道名选择对应的 legacy 密钥。
 - [文档] 更新中英文 LLM 配置指南与 FAQ，补充 GitHub Actions 下渠道模式复用 legacy Secrets 的用法，并明确自定义渠道仍建议使用 `LITELLM_CONFIG` + `LITELLM_CONFIG_YAML`。
 
 ## [3.11.0] - 2026-03-27

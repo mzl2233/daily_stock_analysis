@@ -90,15 +90,27 @@ def _is_provider_host(host: str, domain: str) -> bool:
     return host == domain or host.endswith('.' + domain)
 
 
-def resolve_channel_legacy_api_keys(channel_name: str, base_url: Optional[str]) -> Tuple[List[str], Optional[str]]:
+def resolve_channel_legacy_api_keys(
+    channel_name: str,
+    base_url: Optional[str],
+    resolved_protocol: Optional[str] = None,
+) -> Tuple[List[str], Optional[str]]:
     """Map well-known channel names/hosts to legacy provider secrets.
 
     This keeps local/Docker channel-specific env vars as the primary source, but
     allows common provider channels in GitHub Actions to reuse existing legacy
     secret names without writing real keys into the default `.env`.
+
+    When *resolved_protocol* is supplied it takes precedence over *channel_name*
+    for name-based matching, so that an explicit ``LLM_{NAME}_PROTOCOL`` override
+    selects the correct provider's legacy key instead of blindly trusting the
+    channel name.
     """
-    normalized_name = canonicalize_llm_channel_protocol(channel_name)
-    raw_name = (channel_name or "").strip().lower()
+    # Use the resolved protocol for name-based matching when available,
+    # falling back to the channel name for backward compatibility.
+    effective_name = resolved_protocol if resolved_protocol else channel_name
+    normalized_name = canonicalize_llm_channel_protocol(effective_name)
+    raw_name = (effective_name or "").strip().lower()
     parsed_url = urlparse(base_url or "")
     host = (parsed_url.hostname or "").lower()
     scheme = (parsed_url.scheme or "").lower()
@@ -1520,7 +1532,7 @@ class Config:
             if not api_keys and channel_allows_empty_api_key(protocol, base_url):
                 api_keys = [""]
             if not api_keys:
-                api_keys, legacy_source = resolve_channel_legacy_api_keys(ch_name, base_url)
+                api_keys, legacy_source = resolve_channel_legacy_api_keys(ch_name, base_url, resolved_protocol=protocol)
                 if api_keys and legacy_source:
                     _logger.info(
                         "LLM channel '%s': using legacy API key fallback from %s",
