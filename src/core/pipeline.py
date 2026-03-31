@@ -1325,7 +1325,7 @@ class StockAnalysisPipeline:
                 code = future_to_code[future]
                 try:
                     result = future.result()
-                    if result:
+                    if result and result.success:
                         results.append(result)
                         if single_stock_notify and send_notification and not dry_run:
                             self._send_single_stock_notification(
@@ -1333,6 +1333,11 @@ class StockAnalysisPipeline:
                                 report_type=report_type,
                                 fallback_code=code,
                             )
+                    elif result and not result.success:
+                        logger.warning(
+                            f"[{code}] 分析结果标记为失败，不计入汇总: "
+                            f"{result.error_message or '未知原因'}"
+                        )
 
                     # Issue #128: 分析间隔 - 在个股分析和大盘分析之间添加延迟
                     if idx < len(stock_codes) - 1 and analysis_delay > 0:
