@@ -301,49 +301,12 @@ class SystemConfigService:
 
         try:
             started_at = time.perf_counter()
-            response: requests.Response
-            current_url = models_url
-            max_redirects = 4
-            for redirect_step in range(max_redirects + 1):
-                response = requests.get(
-                    current_url,
-                    headers=request_headers,
-                    timeout=max(5.0, float(timeout_seconds)),
-                    allow_redirects=False,
-                )
-
-                if 300 <= response.status_code < 400:
-                    location = (response.headers.get("Location") or "").strip()
-                    if not location:
-                        break
-
-                    if redirect_step >= max_redirects:
-                        return {
-                            "success": False,
-                            "message": "Model discovery request was redirected too many times",
-                            "error": "Maximum redirect hops reached while discovering models",
-                            "resolved_protocol": resolved_protocol or None,
-                            "models": [],
-                            "latency_ms": None,
-                        }
-
-                    next_url = self._resolve_redirect_url(current_url, location)
-                    redirect_validation_error = self._validate_discovery_redirect_url(next_url)
-                    if redirect_validation_error:
-                        return {
-                            "success": False,
-                            "message": "Model discovery request was redirected to unsafe target",
-                            "error": redirect_validation_error,
-                            "resolved_protocol": resolved_protocol or None,
-                            "models": [],
-                            "latency_ms": None,
-                        }
-
-                    current_url = next_url
-                    continue
-
-                break
-
+            response = requests.get(
+                models_url,
+                headers=request_headers,
+                timeout=max(5.0, float(timeout_seconds)),
+                allow_redirects=False,
+            )
             latency_ms = int((time.perf_counter() - started_at) * 1000)
         except requests.RequestException as exc:
             logger.warning("LLM channel model discovery failed for %s: %s", channel_name, exc)
@@ -933,24 +896,6 @@ class SystemConfigService:
         else:
             models_path = f"{normalized}/models" if normalized else "/models"
         return urlunparse(parsed._replace(path=models_path, params="", query="", fragment=""))
-
-    @staticmethod
-    def _resolve_redirect_url(current_url: str, location: str) -> str:
-        """Resolve a redirect location relative to the current request URL."""
-        return urljoin(current_url, location)
-
-    @staticmethod
-    def _validate_discovery_redirect_url(candidate_url: str) -> str:
-        """Validate a redirect target URL for model-discovery requests."""
-        parsed = urlparse(candidate_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            return "Redirect target must be an absolute HTTP(S) URL"
-        if not SystemConfigService._is_safe_base_url(candidate_url):
-            return (
-                "Redirect target points to a restricted address "
-                "(cloud metadata or link-local network)"
-            )
-        return ""
 
     @staticmethod
     def _extract_llm_discovery_error(response: requests.Response) -> str:
