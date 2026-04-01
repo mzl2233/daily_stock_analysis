@@ -62,7 +62,7 @@ class SkillRouterWarningTests(unittest.TestCase):
         self.assertTrue(any("Failed to get manual skills config" in line for line in cm.output))
 
 
-class SkillAggregatorDebugWarningTests(unittest.TestCase):
+class SkillAggregatorDebugLogTests(unittest.TestCase):
     """SkillAggregator helpers must log at debug level on failure."""
 
     def test_backtest_factor_logs_debug_on_exception(self) -> None:
