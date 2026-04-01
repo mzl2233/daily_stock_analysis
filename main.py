@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
-
 """
 ===================================
 A股自选股智能分析系统 - 主调度程序
@@ -23,48 +21,84 @@ A股自选股智能分析系统 - 主调度程序
 - 效率优先：关注筹码集中度好的股票
 - 买点偏好：缩量回踩 MA5/MA10 支撑
 """
+import os
+from pathlib import Path
+from typing import Dict, Optional
+
+from dotenv import dotenv_values
+from src.config import setup_env
+
+_INITIAL_PROCESS_ENV = dict(os.environ)
+setup_env()
+
+# 代理配置 - 通过 USE_PROXY 环境变量控制，默认关闭
+# GitHub Actions 环境自动跳过代理配置
+if os.getenv("GITHUB_ACTIONS") != "true" and os.getenv("USE_PROXY", "false").lower() == "true":
+    # 本地开发环境，启用代理（可在 .env 中配置 PROXY_HOST 和 PROXY_PORT）
+    proxy_host = os.getenv("PROXY_HOST", "127.0.0.1")
+    proxy_port = os.getenv("PROXY_PORT", "10809")
+    proxy_url = f"http://{proxy_host}:{proxy_port}"
+    os.environ["http_proxy"] = proxy_url
+    os.environ["https_proxy"] = proxy_url
 
 import argparse
 import logging
-import os
 import sys
 import time
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
-from pathlib import Path
+from typing import List, Tuple
 
-if TYPE_CHECKING:
-    from src.config import Config
+from data_provider.base import canonical_stock_code
+from src.webui_frontend import prepare_webui_frontend_assets
+from src.config import get_config, Config
+from src.logging_config import setup_logging
 
 
 logger = logging.getLogger(__name__)
-_INITIAL_PROCESS_ENV = dict(os.environ)
-DEFAULT_LOG_PREFIX = "stock_analysis"
+_RUNTIME_ENV_FILE_KEYS = set()
 
 
-def get_config():
-    """Lazily import config loading to keep CLI bootstrap lightweight."""
-    from src.config import get_config as _get_config
-
-    return _get_config()
-
-
-def setup_logging(*args, **kwargs):
-    """Lazily import logging config to support early bootstrap logging."""
-    from src.logging_config import setup_logging as _setup_logging
-
-    return _setup_logging(*args, **kwargs)
+def _get_active_env_path() -> Path:
+    env_file = os.getenv("ENV_FILE")
+    if env_file:
+        return Path(env_file)
+    return Path(__file__).resolve().parent / ".env"
 
 
-_env_bootstrapped = False
+def _read_active_env_values() -> Optional[Dict[str, str]]:
+    env_path = _get_active_env_path()
+    if not env_path.exists():
+        return {}
+
+    try:
+        values = dotenv_values(env_path)
+    except Exception as exc:  # pragma: no cover - defensive branch
+        logger.warning("读取配置文件 %s 失败，继续沿用当前环境变量: %s", env_path, exc)
+        return None
+
+    return {
+        str(key): "" if value is None else str(value)
+        for key, value in values.items()
+        if key is not None
+    }
+
+
+_ACTIVE_ENV_FILE_VALUES = _read_active_env_values() or {}
+_RUNTIME_ENV_FILE_KEYS = {
+    key for key in _ACTIVE_ENV_FILE_VALUES
+    if key not in _INITIAL_PROCESS_ENV
+}
+
+# setup_env() already ran at import time above.
+_env_bootstrapped = True
 
 
 def _bootstrap_environment() -> None:
     """Load .env and apply optional local proxy settings.
 
-    Guarded to be idempotent so it can safely be called from both ``main()``
-    and from lazy-import paths used by API / bot consumers.
+    Guarded to be idempotent so it can safely be called from lazy-import
+    paths used by API / bot consumers.
     """
     global _env_bootstrapped
     if _env_bootstrapped:
@@ -74,10 +108,7 @@ def _bootstrap_environment() -> None:
 
     setup_env()
 
-    # 代理配置 - 通过 USE_PROXY 环境变量控制，默认关闭
-    # GitHub Actions 环境自动跳过代理配置
     if os.getenv("GITHUB_ACTIONS") != "true" and os.getenv("USE_PROXY", "false").lower() == "true":
-        # 本地开发环境，启用代理（可在 .env 中配置 PROXY_HOST 和 PROXY_PORT）
         proxy_host = os.getenv("PROXY_HOST", "127.0.0.1")
         proxy_port = os.getenv("PROXY_PORT", "10809")
         proxy_url = f"http://{proxy_host}:{proxy_port}"
@@ -97,7 +128,6 @@ def _setup_bootstrap_logging(debug: bool = False) -> None:
     level = logging.DEBUG if debug else logging.INFO
     root = logging.getLogger()
     root.setLevel(level)
-    # Avoid duplicate handlers if called more than once
     if not any(
         isinstance(h, logging.StreamHandler) and getattr(h, "stream", None) is sys.stderr
         for h in root.handlers
@@ -122,9 +152,6 @@ def _get_stock_analysis_pipeline():
     return _Pipeline
 
 
-# Re-export for consumers that do ``from main import StockAnalysisPipeline``
-# (e.g. src/services/task_service.py, bot/commands/batch.py).
-# We use a module-level lazy helper so the heavy import only happens on first access.
 class _LazyPipelineDescriptor:
     """Descriptor that resolves StockAnalysisPipeline on first attribute access."""
 
@@ -150,47 +177,6 @@ def __getattr__(name: str):
     if name == "StockAnalysisPipeline":
         return _exports.StockAnalysisPipeline
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-def _prepare_webui_frontend_assets() -> bool:
-    """Lazily load WebUI asset preparation to avoid top-level heavy imports."""
-    from src.webui_frontend import prepare_webui_frontend_assets
-
-    return prepare_webui_frontend_assets()
-
-
-def _get_active_env_path() -> Path:
-    env_file = os.getenv("ENV_FILE")
-    if env_file:
-        return Path(env_file)
-    return Path(__file__).resolve().parent / ".env"
-
-
-def _read_active_env_values() -> Optional[Dict[str, str]]:
-    from dotenv import dotenv_values
-
-    env_path = _get_active_env_path()
-    if not env_path.exists():
-        return {}
-
-    try:
-        values = dotenv_values(env_path)
-    except Exception as exc:  # pragma: no cover - defensive branch
-        logger.warning("读取配置文件 %s 失败，继续沿用当前环境变量: %s", env_path, exc)
-        return None
-
-    return {
-        str(key): "" if value is None else str(value)
-        for key, value in values.items()
-        if key is not None
-    }
-
-
-_ACTIVE_ENV_FILE_VALUES = _read_active_env_values() or {}
-_RUNTIME_ENV_FILE_KEYS: Dict[str, str] = {
-    key for key in _ACTIVE_ENV_FILE_VALUES
-    if key not in _INITIAL_PROCESS_ENV
-}
 
 
 def _reload_env_file_values_preserving_overrides() -> None:
@@ -427,13 +413,11 @@ def run_full_analysis(
     这是定时任务调用的主函数
     """
     # Import pipeline modules outside the broad try/except so that import-time
-    # failures (missing dependency, syntax error) propagate to the caller and
-    # result in a non-zero exit code instead of being silently swallowed.
+    # failures propagate to the caller instead of being silently swallowed.
     from src.core.market_review import run_market_review
     from src.core.pipeline import StockAnalysisPipeline
 
     try:
-
         # Issue #529: Hot-reload STOCK_LIST from .env on each scheduled run
         if stock_codes is None:
             config.refresh_stock_list()
@@ -613,7 +597,7 @@ def run_full_analysis(
 def start_api_server(host: str, port: int, config: Config) -> None:
     """
     在后台线程启动 FastAPI 服务
-    
+
     Args:
         host: 监听地址
         port: 监听端口
@@ -641,6 +625,7 @@ def _is_truthy_env(var_name: str, default: str = "true") -> bool:
     """Parse common truthy / falsy environment values."""
     value = os.getenv(var_name, default).strip().lower()
     return value not in {"0", "false", "no", "off"}
+
 
 def start_bot_stream_clients(config: Config) -> None:
     """Start bot stream clients when enabled in config."""
@@ -684,10 +669,9 @@ def _resolve_scheduled_stock_codes(stock_codes: Optional[List[str]]) -> Optional
     return None
 
 
-def _reload_runtime_config():
+def _reload_runtime_config() -> Config:
     """Reload config from the latest persisted `.env` values for scheduled runs."""
     _reload_env_file_values_preserving_overrides()
-    from src.config import Config
     Config.reset_instance()
     return get_config()
 
@@ -733,20 +717,12 @@ def main() -> int:
     try:
         _setup_bootstrap_logging(debug=args.debug)
     except Exception as exc:
-        # 如果 bootstrap 日志目录不可写（容器/systemd 只读 CWD 等场景），
-        # 回退到 stderr 日志并继续运行；后续 config.log_dir 可能指向可写路径
         logging.basicConfig(
             level=logging.DEBUG if getattr(args, "debug", False) else logging.INFO,
             format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
             stream=sys.stderr,
         )
         logger.warning("Bootstrap 日志初始化失败，已回退到 stderr: %s", exc)
-
-    try:
-        _bootstrap_environment()
-    except Exception as exc:
-        logger.exception("初始化运行环境失败: %s", exc)
-        return 1
 
     # 加载配置（在 bootstrap logging 之后执行，确保异常有日志）
     try:
@@ -755,9 +731,9 @@ def main() -> int:
         logger.exception("加载配置失败: %s", exc)
         return 1
 
-    # 切换到配置指定的日志目录（正常路径保持原行为）
+    # 配置日志（输出到控制台和文件）
     try:
-        setup_logging(log_prefix=DEFAULT_LOG_PREFIX, debug=args.debug, log_dir=config.log_dir)
+        setup_logging(log_prefix="stock_analysis", debug=args.debug, log_dir=config.log_dir)
     except Exception as exc:
         logger.exception("切换到配置日志目录失败: %s", exc)
         return 1
@@ -775,8 +751,6 @@ def main() -> int:
     # 解析股票列表（统一为大写 Issue #355）
     stock_codes = None
     if args.stocks:
-        from data_provider.base import canonical_stock_code
-
         stock_codes = [canonical_stock_code(c) for c in args.stocks.split(',') if (c or "").strip()]
         logger.info(f"使用命令行指定的股票列表: {stock_codes}")
 
@@ -802,12 +776,7 @@ def main() -> int:
 
     bot_clients_started = False
     if start_serve:
-        frontend_assets_ready = False
-        try:
-            frontend_assets_ready = _prepare_webui_frontend_assets()
-        except Exception as exc:
-            logger.exception("准备 WebUI 前端资源失败: %s", exc)
-        if not frontend_assets_ready:
+        if not prepare_webui_frontend_assets():
             logger.warning("前端静态资源未就绪，继续启动 FastAPI 服务（Web 页面可能不可用）")
         try:
             start_api_server(host=args.host, port=args.port, config=config)
@@ -925,9 +894,11 @@ def main() -> int:
 
             from src.scheduler import run_with_schedule
             scheduled_stock_codes = _resolve_scheduled_stock_codes(stock_codes)
+            schedule_time_provider = _build_schedule_time_provider(config.schedule_time)
 
             def scheduled_task():
-                run_full_analysis(config, args, scheduled_stock_codes)
+                runtime_config = _reload_runtime_config()
+                run_full_analysis(runtime_config, args, scheduled_stock_codes)
 
             background_tasks = []
             if getattr(config, 'agent_event_monitor_enabled', False):
@@ -956,6 +927,7 @@ def main() -> int:
                 schedule_time=config.schedule_time,
                 run_immediately=should_run_immediately,
                 background_tasks=background_tasks,
+                schedule_time_provider=schedule_time_provider,
             )
             return 0
 
