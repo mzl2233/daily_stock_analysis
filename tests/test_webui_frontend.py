@@ -68,7 +68,7 @@ def test_prepare_webui_frontend_assets_warns_when_assets_missing(tmp_path, monke
         result = webui_frontend.prepare_webui_frontend_assets()
 
     assert result is True  # function still returns True (index.html present)
-    assert "assets/ 目录不存在或无 CSS/JS 文件" in caplog.text
+    assert "目录不存在或无 CSS/JS 文件" in caplog.text
     assert "WebUI 将因缺少样式与脚本而显示异常" in caplog.text
 
 
@@ -87,7 +87,7 @@ def test_prepare_webui_frontend_assets_auto_build_disabled_warns_when_assets_mis
         result = webui_frontend.prepare_webui_frontend_assets()
 
     assert result is True  # index.html present, still returns True
-    assert "assets/ 目录不存在或无 CSS/JS 文件" in caplog.text
+    assert "目录不存在或无 CSS/JS 文件" in caplog.text
 
 
 def test_has_static_assets_returns_false_for_missing_dir(tmp_path):

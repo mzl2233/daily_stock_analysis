@@ -227,7 +227,7 @@ docker-compose -f ./docker/docker-compose.yml up -d
 
 重建完成后，用 `Ctrl+Shift+R` 强制刷新浏览器缓存，再访问页面。
 
-**直接部署用户**：先确保已安装 Node.js 20+，然后手动构建前端：
+**直接部署用户**：先确保已安装 Node.js 18+（推荐 20+），然后手动构建前端：
 
 ```bash
 cd apps/dsa-web

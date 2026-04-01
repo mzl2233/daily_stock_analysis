@@ -122,7 +122,9 @@ def _run_frontend_commands(commands: Sequence[Sequence[str]], frontend_dir: Path
 
 
 def _manual_build_command(frontend_dir: Path) -> str:
-    return f'cd "{frontend_dir}" && npm install && npm run build'
+    lock_file = frontend_dir / "package-lock.json"
+    install_cmd = "npm ci" if lock_file.exists() else "npm install"
+    return f'cd "{frontend_dir}" && {install_cmd} && npm run build'
 
 
 def _has_static_assets(static_dir: Path) -> bool:
@@ -146,11 +148,13 @@ def _has_static_assets(static_dir: Path) -> bool:
 def _warn_if_assets_missing(artifact_index: Path, frontend_dir: Path) -> None:
     """当 index.html 存在但 assets/ 缺失时，发出页面显示异常警告。"""
     static_dir = artifact_index.parent
+    assets_dir = static_dir / "assets"
     if not _has_static_assets(static_dir):
         logger.warning(
-            "检测到 %s 但 static/assets/ 目录不存在或无 CSS/JS 文件，"
+            "检测到 %s 但 %s 目录不存在或无 CSS/JS 文件，"
             "WebUI 将因缺少样式与脚本而显示异常（元素过大、布局错乱）",
             artifact_index,
+            assets_dir,
         )
         logger.warning(
             "请重新构建前端以修复此问题: %s",
