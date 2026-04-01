@@ -85,6 +85,7 @@ def test_clawbot_message_routes_to_analysis_and_formats_text():
         return_value=analysis_result,
     ) as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message="帮我分析贵州茅台", mode="analysis")
         )
 
@@ -114,6 +115,7 @@ def test_clawbot_message_routes_to_agent_with_stable_session_id():
     with patch("api.v1.endpoints.clawbot.get_config", return_value=config), \
          patch("api.v1.endpoints.clawbot._build_executor", return_value=executor):
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(
                 message="用缠论分析 600519",
                 mode="agent",
@@ -148,6 +150,7 @@ def test_clawbot_message_auto_mode_falls_back_to_agent_for_plain_english_text():
          patch("api.v1.endpoints.clawbot.CommandDispatcher._resolve_stock_code_from_text", return_value=None), \
          patch("api.v1.endpoints.clawbot._handle_sync_analysis") as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message="I need advice", mode="auto", user_id="wx_user_002")
         )
 
@@ -173,6 +176,7 @@ def test_clawbot_message_auto_mode_falls_back_to_agent_for_uppercase_english_tex
          patch("api.v1.endpoints.clawbot.CommandDispatcher._resolve_stock_code_from_text", return_value=None), \
          patch("api.v1.endpoints.clawbot._handle_sync_analysis") as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message="I NEED ADVICE", mode="auto", user_id="wx_user_004")
         )
 
@@ -210,6 +214,7 @@ def test_clawbot_message_auto_mode_routes_direct_ascii_ticker_to_analysis(
         return_value=analysis_result,
     ) as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message=message, mode="auto")
         )
 
@@ -250,6 +255,7 @@ def test_clawbot_message_auto_mode_routes_english_request_with_ascii_ticker_to_a
         return_value=analysis_result,
     ) as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message=message, mode="auto")
         )
 
@@ -267,6 +273,7 @@ def test_clawbot_analysis_mode_rejects_plain_english_text():
     """mode=analysis should return unresolved_stock for non-stock plain text."""
     try:
         handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message="I need advice", mode="analysis")
         )
         assert False, "Expected HTTPException"
@@ -282,6 +289,7 @@ def test_clawbot_message_returns_consistent_error_when_agent_unavailable():
         with patch("api.v1.endpoints.clawbot._build_executor") as build_executor:
             try:
                 handle_clawbot_message(
+                    _build_request(),
                     ClawBotMessageRequest(message="用缠论分析 600519", mode="agent")
                 )
                 assert False, "Expected HTTPException"
@@ -312,6 +320,7 @@ def test_clawbot_message_validation_handler_returns_error_response_shape():
 def test_clawbot_message_http_handler_normalizes_analysis_validation_error():
     try:
         handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message="??", mode="analysis", stock_code="??")
         )
         assert False, "Expected HTTPException"
@@ -331,6 +340,7 @@ def test_clawbot_message_http_handler_wraps_executor_exception_as_agent_failed()
          patch("api.v1.endpoints.clawbot._build_executor", side_effect=RuntimeError("executor boom")):
         try:
             handle_clawbot_message(
+                _build_request(),
                 ClawBotMessageRequest(
                     message="用缠论分析 600519",
                     mode="agent",
@@ -362,6 +372,7 @@ def test_clawbot_auto_mode_rejects_plain_english_word_as_direct_ticker(word: str
          patch("api.v1.endpoints.clawbot.CommandDispatcher._resolve_stock_code_from_text", return_value=None), \
          patch("api.v1.endpoints.clawbot._handle_sync_analysis") as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message=word, mode="auto")
         )
 
@@ -384,6 +395,7 @@ def test_clawbot_analysis_mode_resolves_word_like_ticker():
         return_value=analysis_result,
     ) as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message="SHOP", mode="analysis")
         )
 
@@ -410,6 +422,7 @@ def test_clawbot_auto_mode_routes_analyze_word_like_ticker_to_analysis():
         return_value=analysis_result,
     ) as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message="analyze SHOP", mode="auto")
         )
 
@@ -446,6 +459,7 @@ def test_clawbot_auto_mode_routes_single_letter_ticker_in_text(
         return_value=analysis_result,
     ) as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message=message, mode="auto")
         )
 
@@ -481,9 +495,73 @@ def test_clawbot_auto_mode_resolves_lowercase_ticker_in_free_text(
         return_value=analysis_result,
     ) as handle_analysis:
         response = handle_clawbot_message(
+            _build_request(),
             ClawBotMessageRequest(message=message, mode="auto")
         )
 
     assert response.mode == "analysis"
     assert response.stock_code == expected_code
     handle_analysis.assert_called_once()
+
+
+def test_clawbot_message_rejects_request_when_secret_mismatch():
+    """When CLAWBOT_SECRET is set, mismatched header should return 401."""
+    import os
+    from starlette.datastructures import Headers
+
+    def _build_request_with_header(secret_value: str) -> Request:
+        encoded = secret_value.encode()
+        return Request(
+            {
+                "type": "http",
+                "http_version": "1.1",
+                "method": "POST",
+                "scheme": "http",
+                "path": "/api/v1/clawbot/message",
+                "raw_path": b"/api/v1/clawbot/message",
+                "query_string": b"",
+                "headers": [(b"x-clawbot-secret", encoded)],
+                "client": ("testclient", 50000),
+                "server": ("testserver", 80),
+            }
+        )
+
+    with patch.dict(os.environ, {"CLAWBOT_SECRET": "correct_secret"}):
+        # Wrong secret → 401
+        try:
+            handle_clawbot_message(
+                _build_request_with_header("wrong_secret"),
+                ClawBotMessageRequest(message="分析茅台", mode="auto"),
+            )
+            assert False, "Expected HTTPException 401"
+        except HTTPException as exc:
+            assert exc.status_code == 401
+            assert exc.detail["error"] == "unauthorized"
+
+        # Correct secret → proceeds past auth (agent unavailable → 400 is fine)
+        config = SimpleNamespace(is_agent_available=lambda: False)
+        with patch("api.v1.endpoints.clawbot.get_config", return_value=config):
+            try:
+                handle_clawbot_message(
+                    _build_request_with_header("correct_secret"),
+                    ClawBotMessageRequest(message="分析茅台", mode="auto"),
+                )
+            except HTTPException as exc:
+                assert exc.status_code != 401, "Should not get 401 with correct secret"
+
+
+def test_clawbot_message_allows_request_when_no_secret_configured():
+    """When CLAWBOT_SECRET is not set, all requests should proceed past auth."""
+    import os
+
+    env_without_secret = {k: v for k, v in os.environ.items() if k != "CLAWBOT_SECRET"}
+    with patch.dict(os.environ, env_without_secret, clear=True):
+        config = SimpleNamespace(is_agent_available=lambda: False)
+        with patch("api.v1.endpoints.clawbot.get_config", return_value=config):
+            try:
+                handle_clawbot_message(
+                    _build_request(),
+                    ClawBotMessageRequest(message="分析茅台", mode="auto"),
+                )
+            except HTTPException as exc:
+                assert exc.status_code != 401, "No secret configured, should not get 401"

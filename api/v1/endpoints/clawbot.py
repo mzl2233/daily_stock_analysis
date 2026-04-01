@@ -9,7 +9,9 @@ import re
 import uuid
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+import os
+
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from api.v1.endpoints.agent import _build_executor
@@ -450,16 +452,24 @@ def _run_agent(request: ClawBotMessageRequest) -> ClawBotMessageResponse:
     responses={
         200: {"description": "ClawBot 文本响应", "model": ClawBotMessageResponse},
         400: {"description": "请求参数错误或能力不可用", "model": ErrorResponse},
+        401: {"description": "X-ClawBot-Secret 校验失败（仅在配置 CLAWBOT_SECRET 时生效）", "model": ErrorResponse},
         422: {"description": "请求体验证失败", "model": ErrorResponse},
         500: {"description": "分析或 Agent 执行失败", "model": ErrorResponse},
     },
     summary="ClawBot 文本桥接",
     description="为微信/openclaw ClawBot 提供稳定的文本入参与文本出参桥接层。",
 )
-def handle_clawbot_message(request: ClawBotMessageRequest) -> ClawBotMessageResponse:
+def handle_clawbot_message(http_request: Request, request: ClawBotMessageRequest) -> ClawBotMessageResponse:
     """
     Bridge WeChat/openclaw ClawBot requests to existing analysis/agent capabilities.
     """
+    # Optional shared-secret guard: set CLAWBOT_SECRET to protect the endpoint.
+    # If configured, callers must send the matching value in X-ClawBot-Secret.
+    clawbot_secret = os.environ.get("CLAWBOT_SECRET", "").strip()
+    if clawbot_secret:
+        provided = http_request.headers.get("X-ClawBot-Secret", "")
+        if provided != clawbot_secret:
+            _raise_clawbot_error(401, "unauthorized", "X-ClawBot-Secret 校验失败")
     try:
         if not request.message.strip():
             _raise_clawbot_error(
