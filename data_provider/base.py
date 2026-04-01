@@ -64,12 +64,11 @@ def summarize_exception(exc: Exception) -> Tuple[str, str]:
 
 _normalize_logger = logging.getLogger(__name__ + ".normalize")
 
-# Bare 5-digit HK codes that are explicitly known (from STOCK_NAME_MAP).
-# These are protected from the A-share auto-pad heuristic.
-_KNOWN_HK_BARE_CODES: frozenset = frozenset(
-    k for k in STOCK_NAME_MAP
-    if k.isdigit() and len(k) == 5
-)
+# Bare 5-digit HK-style numeric codes.
+# Any 5-digit numeric code is treated as a potential HK bare code and is
+# protected from the A-share auto-pad heuristic to avoid misclassifying
+# legitimate HK tickers (e.g. '02319') as A-share symbols.
+_KNOWN_HK_BARE_CODES: frozenset = frozenset(f"{i:05d}" for i in range(1, 100000))
 
 
 def normalize_stock_code(stock_code: str) -> str:
@@ -88,16 +87,15 @@ def normalize_stock_code(stock_code: str) -> str:
     - 'HK00700'     -> 'HK00700'  (keep HK prefix for HK stocks)
     - '1810.HK'     -> 'HK01810'  (normalize HK suffix to canonical prefix form)
     - 'AAPL'        -> 'AAPL'     (keep US stock ticker as-is)
-    - '02714'       -> '002714'   (ambiguous 5-digit: auto-pad to A-share SZ code)
+    - '02714'       -> '02714'    (ambiguous 5-digit: kept as-is, upstream decides routing)
 
     Bare 5-digit codes starting with '0' are ambiguous: they could be HK stocks
-    (e.g. '00700' for Tencent) or a mistyped A-share code missing one leading zero
-    (e.g. '02714' intended as '002714' 牧原股份). Resolution rules:
-    1. If the 5-digit code is in the known-HK whitelist (STOCK_NAME_MAP) → keep as-is.
-    2. If the 5-digit code starts with '0' and prepending another '0' yields a 6-digit
-       code in the common Shenzhen A-share range (000xxx–003xxx) → auto-pad and warn.
-    3. Otherwise → keep as-is (let downstream routing decide).
-    For unambiguous HK routing always use an explicit prefix/suffix: 'HK02714' or '02714.HK'.
+    (e.g. '00700' for Tencent, '02319' for China Mengniu) or a mistyped A-share code
+    missing one leading zero (e.g. '02714' intended as '002714' 牧原股份).
+    To avoid misclassifying legitimate HK codes, normalization is kept purely syntactic:
+    5-digit codes are left unchanged and upper-layer routing (DataFetcherManager/pipeline)
+    may retry with a padded A-share code when the HK lookup returns empty.
+    For unambiguous routing always use an explicit prefix/suffix: 'HK02714' or '02714.HK'.
 
     This function is applied at the DataProviderManager layer so that
     all individual fetchers receive a clean 6-digit code (for A-shares/ETFs).
@@ -132,22 +130,12 @@ def normalize_stock_code(stock_code: str) -> str:
         if suffix.upper() in ('SH', 'SZ', 'SS', 'BJ') and base.isdigit():
             return base
 
-    # Resolve ambiguous bare 5-digit codes starting with '0'.
-    # A bare 5-digit code like '02714' is indistinguishable from a HK code at the
-    # syntactic level. We use two heuristics to decide:
-    #   (a) If the code is in _KNOWN_HK_BARE_CODES → treat as HK and leave unchanged.
-    #   (b) If prepending '0' yields a 6-digit code in the Shenzhen A-share range
-    #       (prefix 000–003) → pad and emit a warning to alert the user.
-    if code.isdigit() and len(code) == 5 and code[0] == '0':
-        if code not in _KNOWN_HK_BARE_CODES:
-            padded = '0' + code
-            if padded[:3] in ('000', '001', '002', '003'):
-                _normalize_logger.warning(
-                    "股票代码 '%s' 为 5 位纯数字，已自动补全为 '%s'（深市 A 股代码）。"
-                    "如本意为港股，请改用 'HK%s' 或 '%s.HK' 格式以消除歧义。",
-                    code, padded, code, code,
-                )
-                return padded
+    # NOTE:
+    # 为避免在规范化阶段误判市场，像 '02319' 这类 5 位纯数字且以 '0' 开头的代码
+    # 在语法上既可能是港股，也可能是 A 股前面少写了一位。这里保持"纯语法"规范化：
+    # - 不对这类代码做自动补全或市场推断；
+    # - 直接原样返回，由上层 DataFetcherManager / 管线在首轮查询无数据时决定是否
+    #   以补零后的 A 股代码重试。
 
     return code
 

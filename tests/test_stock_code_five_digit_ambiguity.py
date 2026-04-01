@@ -7,10 +7,11 @@ HK stock path and returned wrong data (蒙牛乳业 HK:02319).
 
 Covered acceptance criteria:
 1. '002714' → '002714'  (6-digit A-share, unchanged)
-2. '02714'  → '002714'  (5-digit, auto-padded to A-share SZ code)
+2. '02714'  → '02714'   (5-digit, kept as-is; upstream decides routing)
 3. '00700'  → '00700'   (known HK, kept as-is)
 4. 'HK02714' → 'HK02714' (explicit HK prefix, stays HK)
 5. '02714.HK' → 'HK02714' (explicit HK suffix, stays HK)
+6. '02319'  → '02319'   (real HK code not in old STOCK_NAME_MAP, must not be padded)
 """
 
 import sys
@@ -46,9 +47,9 @@ class TestFiveDigitAmbiguity(unittest.TestCase):
         self.assertEqual(normalize_stock_code("000001"), "000001")
         self.assertEqual(normalize_stock_code("600519"), "600519")
 
-    def test_five_digit_02714_padded_to_ashare(self):
-        """'02714' → '002714' (牧原股份 SZ, the bug case)."""
-        self.assertEqual(normalize_stock_code("02714"), "002714")
+    def test_five_digit_02714_kept_as_is(self):
+        """'02714' must be kept as-is; upstream routing decides whether to pad."""
+        self.assertEqual(normalize_stock_code("02714"), "02714")
 
     def test_five_digit_tencent_kept_as_hk(self):
         """'00700' (腾讯控股) is a known HK code and must stay '00700'."""
@@ -94,15 +95,24 @@ class TestFiveDigitAmbiguity(unittest.TestCase):
         """'05500' padded → '005500' starts with '005', outside 000-003 → unchanged."""
         self.assertEqual(normalize_stock_code("05500"), "05500")
 
+    def test_five_digit_02319_kept_as_hk(self):
+        """'02319' (蒙牛乳业) is a real HK code absent from old STOCK_NAME_MAP;
+        must NOT be padded to '002319' (which would be a wrong A-share code)."""
+        self.assertEqual(normalize_stock_code("02319"), "02319")
+
     # --- _KNOWN_HK_BARE_CODES sanity check ---
 
     def test_known_hk_bare_codes_contains_tencent(self):
         """'00700' must be in the HK whitelist."""
         self.assertIn("00700", _KNOWN_HK_BARE_CODES)
 
-    def test_known_hk_bare_codes_does_not_contain_02714(self):
-        """'02714' must NOT be in the HK whitelist."""
-        self.assertNotIn("02714", _KNOWN_HK_BARE_CODES)
+    def test_known_hk_bare_codes_contains_02714(self):
+        """'02714' must now be in the HK whitelist (all 5-digit codes are protected)."""
+        self.assertIn("02714", _KNOWN_HK_BARE_CODES)
+
+    def test_known_hk_bare_codes_contains_02319(self):
+        """'02319' (蒙牛乳业, not in old STOCK_NAME_MAP) must be in the HK whitelist."""
+        self.assertIn("02319", _KNOWN_HK_BARE_CODES)
 
     # --- Other normalize_stock_code behaviours must be preserved ---
 
