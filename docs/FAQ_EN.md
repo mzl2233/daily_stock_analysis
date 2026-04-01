@@ -260,7 +260,7 @@ Work through the following 5 checkpoints in order:
    - If Ollama runs on a different host, set `OLLAMA_API_BASE` to its actual IP, e.g. `http://192.168.1.100:11434`.
    - Make sure port 11434 is open and Ollama binds the right address (`OLLAMA_HOST=0.0.0.0:11434`).
 
-> See [LLM Config Guide → Example 4 (Ollama)](LLM_CONFIG_GUIDE_EN.md) for a complete configuration example.
+> See [LLM Config Guide → Example 4 (Ollama)](LLM_CONFIG_GUIDE_EN.md#example-4-ollama) for a complete configuration example.
 
 ---
 
@@ -324,4 +324,4 @@ If the above content doesn't solve your issue, welcome to:
 
 ---
 
-*Last updated: 2026-02-01*
+*Last updated: 2026-04-01*
