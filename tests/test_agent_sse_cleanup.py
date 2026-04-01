@@ -8,18 +8,17 @@ Verifies that:
 """
 
 import asyncio
-import logging
 import sys
 import os
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Stub optional heavy deps before importing agent endpoint
-for _mod in ("litellm",):
-    if _mod not in sys.modules:
-        sys.modules[_mod] = MagicMock()
+from tests.litellm_stub import ensure_litellm_stub
+
+# Stub optional heavy deps before importing agent endpoint, without overriding a real install
+ensure_litellm_stub()
 
 
 class TestAgentSSECleanup(unittest.IsolatedAsyncioTestCase):
@@ -41,9 +40,13 @@ class TestAgentSSECleanup(unittest.IsolatedAsyncioTestCase):
 
         # Replicate the finally block logic directly
         try:
-            await asyncio.wait_for(asyncio.shield(fut), timeout=5.0)
+            await asyncio.wait_for(fut, timeout=5.0)
         except asyncio.CancelledError:
             pass
+        except asyncio.TimeoutError:
+            agent_mod.logger.debug(
+                "agent executor cleanup timed out after 5s for session %s", "test-session"
+            )
         except Exception as exc:
             agent_mod.logger.warning(
                 "agent executor cleanup error (ignored): %s", exc, exc_info=True
