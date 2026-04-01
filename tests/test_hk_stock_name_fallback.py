@@ -11,10 +11,14 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-if "litellm" not in sys.modules:
-    sys.modules["litellm"] = MagicMock()
-if "json_repair" not in sys.modules:
-    sys.modules["json_repair"] = MagicMock()
+from tests.litellm_stub import ensure_litellm_stub
+
+ensure_litellm_stub()
+try:
+    import json_repair  # noqa: F401
+except ImportError:
+    if "json_repair" not in sys.modules:
+        sys.modules["json_repair"] = MagicMock()
 
 from data_provider.akshare_fetcher import AkshareFetcher
 
