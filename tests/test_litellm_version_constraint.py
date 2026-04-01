@@ -6,7 +6,6 @@ and Kubernetes secrets. See https://github.com/BerriAI/litellm/issues/24521
 """
 
 import os
-import re
 import unittest
 
 
