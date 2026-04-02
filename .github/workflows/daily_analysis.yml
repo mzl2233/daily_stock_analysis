@@ -325,3 +325,19 @@ jobs:
           git add latest.json
           git diff --cached --quiet && echo "无变更" || (git commit -m "Update AI decisions $(date +%Y-%m-%d)" && git push)
           echo "✅ 已推送到 ai-stock-decisions"
+
+      - name: 📊 推送到飞书
+        if: always()
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          REPORT_DIR: reports
+        run: |
+          pip install requests -q
+          if [ -f "reports/latest.json" ]; then
+            python scripts/push_feishu.py
+            echo "✅ 飞书推送完成"
+          else
+            echo "⚠️ 未找到 latest.json，跳过飞书推送"
+          fi
