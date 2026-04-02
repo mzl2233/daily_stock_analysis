@@ -483,20 +483,24 @@ FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/your_hook_token
 
 **Step-by-step setup:**
 
-1. Add a "Custom Bot" in the target Feishu group and copy its Webhook URL.
-2. Set `FEISHU_WEBHOOK_URL`. It usually looks like `https://open.feishu.cn/open-apis/bot/v2/hook/...`.
-3. Go back to the bot's **Security Settings** and check whether any extra security option is enabled:
+1. **Create a Custom Bot in the target Feishu group**:
+   - Open the group → tap the settings icon (top right) → **Group Bots** → **Add Bot** → **Custom Bot**
+   - Enter a name for the bot, then copy the generated **Webhook URL** (format: `https://open.feishu.cn/open-apis/bot/v2/hook/...`)
+2. Set `FEISHU_WEBHOOK_URL` to the URL you just copied.
+3. Check the bot's **Security Settings** and add the corresponding config if any extra option is enabled:
    - **No extra security**: only `FEISHU_WEBHOOK_URL` is needed.
    - **Signature verification enabled**: copy the secret shown in Feishu into `FEISHU_WEBHOOK_SECRET`. **Both sides must be enabled or disabled together** — if Feishu has signing on but `FEISHU_WEBHOOK_SECRET` is missing (or vice versa), every request will be rejected.
-   - **Keyword enabled**: copy the exact same keyword into `FEISHU_WEBHOOK_KEYWORD`. The app will prepend it to every message automatically.
+   - **Keyword enabled**: copy the exact same keyword into `FEISHU_WEBHOOK_KEYWORD`. The app will prepend it to every message automatically; no need to change report templates.
+   - **IP allowlist enabled**: make sure the outbound IP of your runtime (local / Docker / GitHub Actions each have different IPs) is on the allowlist.
 4. `FEISHU_APP_ID` / `FEISHU_APP_SECRET` are for Feishu app / Stream Bot / cloud document flows only — they do **not** trigger group webhook notifications and must not be used instead of `FEISHU_WEBHOOK_URL`.
 
-Common failure causes:
+**Common failure causes:**
 - Only `FEISHU_APP_ID` / `FEISHU_APP_SECRET` were set, but `FEISHU_WEBHOOK_URL` was not configured
 - The bot has Signature security enabled, but `FEISHU_WEBHOOK_SECRET` was not set locally (or was mistakenly set to `FEISHU_APP_SECRET`)
 - The bot has Keyword security enabled, but `FEISHU_WEBHOOK_KEYWORD` was not set locally
 - The bot was not added to the target group, or group permissions block it from posting
 - A Feishu IP allowlist is enabled and your runtime IP is not on the allowlist
+- Message content too long: Feishu has a per-message length limit; the system auto-segments messages. For full content in a single document, configure Feishu Cloud Document (`FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_FOLDER_TOKEN`)
 
 For a full illustrated troubleshooting guide, see [docs/bot/feishu-bot-config.md](bot/feishu-bot-config.md).
 

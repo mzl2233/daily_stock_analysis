@@ -571,12 +571,15 @@ FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/your_hook_token
 
 **完整步骤：**
 
-1. 在飞书群聊中添加"自定义机器人"，复制 Webhook URL。
-2. 设置 `FEISHU_WEBHOOK_URL`，格式通常为 `https://open.feishu.cn/open-apis/bot/v2/hook/...`。
-3. 回到飞书机器人「安全设置」，确认是否启用了额外安全项：
+1. **在飞书群聊中创建自定义机器人**：
+   - 打开目标群聊 → 右上角「群设置」→「群机器人」→「添加机器人」→「自定义机器人」
+   - 填写机器人名称，复制生成的 **Webhook URL**（格式：`https://open.feishu.cn/open-apis/bot/v2/hook/...`）
+2. 设置 `FEISHU_WEBHOOK_URL`（即上一步复制的 URL）。
+3. 查看机器人**安全设置**，根据启用的安全项决定是否需要补充配置：
    - **无额外安全设置**：仅填 `FEISHU_WEBHOOK_URL` 即可。
    - **开启了「签名校验」**：把飞书显示的 secret 填到 `FEISHU_WEBHOOK_SECRET`。两端必须同时启用或同时不填，否则飞书返回签名校验失败。
-   - **开启了「关键词」**：把同一个关键词填到 `FEISHU_WEBHOOK_KEYWORD`；系统会自动在每条消息前补上。
+   - **开启了「关键词」**：把同一个关键词填到 `FEISHU_WEBHOOK_KEYWORD`；系统会自动在每条消息前补上，无需手动修改报告模板。
+   - **开启了 IP 白名单**：确保当前运行环境的出口 IP 在白名单中（本地/Docker/GitHub Actions 出口 IP 各不相同）。
 4. `FEISHU_APP_ID` / `FEISHU_APP_SECRET` 是飞书应用 / Stream Bot / 云文档模式专用，不会触发群 Webhook 推送，不要用它们替代 `FEISHU_WEBHOOK_URL`。
 
 **常见失败原因：**
@@ -585,6 +588,7 @@ FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/your_hook_token
 - 飞书机器人开启了「关键词」，但本地没有同步配置 `FEISHU_WEBHOOK_KEYWORD`
 - 机器人没有被加入目标群，或群管理员限制了机器人发言
 - 飞书侧额外配置了 IP 白名单，但当前运行环境 IP 不在白名单中
+- 消息内容超长：飞书单条消息有长度限制，系统会自动分段发送；如需在一个文档内查看完整内容，可配置飞书云文档功能（`FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_FOLDER_TOKEN`）
 
 更完整的图文排查请看 [docs/bot/feishu-bot-config.md](bot/feishu-bot-config.md)。
 ### Telegram
